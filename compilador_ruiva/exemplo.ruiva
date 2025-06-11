@@ -1,3 +1,14 @@
 // exemplo.ruiva
 Alex M2 = 42;
 DISK DUNNY("Olá, Pensão da Tia Ruiva!");
+
+Alex M2 = M2 + 8;
+DISK DUNNY(M2);
+
+Todd X = 0;
+OLHA SO AQUI Todd?("Digite um número: ", &X);
+
+DISK DUNNY("Você digitou: ");
+DISK DUNNY(X);
+
+uuuuh

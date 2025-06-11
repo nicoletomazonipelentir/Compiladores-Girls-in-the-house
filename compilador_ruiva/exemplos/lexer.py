@@ -7,10 +7,10 @@ tokens = [
 ]
 
 reserved = {
-    'Duny FR': 'CHAR',
-    'Shaft M1': 'SHORT',
-    'Alex M2': 'INT',
-    'Todd M3': 'LONG',
+    'Duny': 'CHAR',
+    'Shaft': 'SHORT',
+    'Alex': 'INT',
+    'Todd': 'LONG',
     'KENDRA FOXTI': 'FOR',
     'DOMENICA': 'CONTINUE',
     'EU TENHO MAIS O QUE FAZER': 'BREAK',
