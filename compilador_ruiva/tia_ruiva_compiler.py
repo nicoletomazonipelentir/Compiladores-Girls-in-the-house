@@ -137,6 +137,10 @@ class TiaRuivaCompiler:
         elif line.startswith('DISK DUNNY'):
             self.process_print(line)
             return
+        # Adicione este caso para input
+        elif line.startswith('OLHA SO AQUI'):
+            self.process_input(line)
+            return
         
         # 3. Atribuições
         elif '=' in line and not line.startswith(('A Katia', 'Anteriormente', 'Caralhetee', 'Ja fui')):
@@ -186,6 +190,25 @@ class TiaRuivaCompiler:
         # 9. Comando não reconhecido
         else:
             raise SyntaxError(f"Comando não reconhecido: {line}")
+
+    def process_input(self, line):
+        try:
+            # Extrai o tipo e variável (ex: "Todd?("%d", &X)")
+            parts = line.split('?', 1)
+            var_type = parts[0].split()[-1]  # Pega "Todd"
+            var_part = parts[1].split('&')[-1].rstrip(');').strip()  # Pega "X"
+            
+            # Simula a entrada do usuário
+            user_input = input(f"Digite um valor para {var_part}: ")
+            
+            # Converte para o tipo correto
+            if var_type in self.type_map:
+                self.variables[var_part] = self.type_map[var_type](user_input)
+            else:
+                raise ValueError(f"Tipo desconhecido: {var_type}")
+                
+        except Exception as e:
+            raise RuntimeError(f"Erro no input: {str(e)}")
 
     def get_value(self, var):
         var = var.strip()
@@ -423,29 +446,34 @@ class TiaRuivaCompiler:
                 raise Exception(f"Variável '{var}' não definida para incremento")
 
     def process_while(self, lines, start_idx):
-        line = lines[start_idx]
-        condition = line[line.find('(')+1:line.rfind(')')].strip()
-        
-        block_lines = []
-        i = start_idx + 1
-        while i < len(lines) and lines[i].strip() != 'uuuuh':
-            block_lines.append(lines[i])
-            i += 1
-        
-        while self.evaluate_expression(condition):
-            for inner_line in block_lines:
-                self.flow_control = None
-                self.execute_line(inner_line)
+        try:
+            line = lines[start_idx]
+            condition = line[line.find('(')+1:line.rfind(')')].strip()
+            
+            # Pega o bloco do while
+            block_lines = []
+            i = start_idx + 1
+            while i < len(lines) and lines[i].strip() != 'uuuuh':
+                block_lines.append(lines[i])
+                i += 1
+            
+            # Executa o loop
+            while self.evaluate_expression(condition):
+                for inner_line in block_lines:
+                    self.flow_control = None
+                    self.execute_line(inner_line)
+                    
+                    if self.flow_control == 'break':
+                        return i + 1  # Sai do while
+                    elif self.flow_control == 'continue':
+                        break  # Pula para próxima iteração
                 
                 if self.flow_control == 'break':
-                    return i + 1
-                elif self.flow_control == 'continue':
                     break
             
-            if self.flow_control == 'break':A
-                break
-                
-        return i + 1
+            return i + 1
+        except Exception as e:
+            raise RuntimeError(f"Erro no while: {str(e)}")
 
     def process_variable_declaration(self, line):
         try:
