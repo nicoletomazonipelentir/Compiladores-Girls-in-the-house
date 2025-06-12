@@ -472,7 +472,7 @@ class TiaRuivaCompiler:
                 elif self.flow_control == 'continue':
                     break  # Pula para próxima iteração
             
-            if self.flow_control == 'break':
+            if self.flow_control == 'break':A
                 break
                 
             # Atualiza condição se não foi continue
