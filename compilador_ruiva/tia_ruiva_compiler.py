@@ -18,6 +18,9 @@ class TiaRuivaCompiler:
         self.global_vars = {}
         self.context_stack = [{'vars': {}, 'functions': {}}]
         self.output = []
+        self.global_functions = {}  # Dicionário para armazenar funções
+        self.current_function = None  # Nome da função sendo processada
+        self.context_stack = [{'vars': {}, 'functions': {}}]  # Pilha de contexto
         
     def compile_and_run(self, code):
         self.lines = [line.strip() for line in code.split('\n') if line.strip() and not line.strip().startswith('//')]
@@ -158,7 +161,14 @@ class TiaRuivaCompiler:
             var = line.replace('-', '').replace(';', '')
             self.execute_line(f"{var} = {var} - 1")
             return
-
+     # Declaração de função
+        if line.startswith('PENSÃO DA TIA RUIVA RECEBE'):
+            return self.process_function_declaration(line)
+            
+        # Chamada de função
+        elif 'PENSÃO DA TIA RUIVA ENTREGA' in line:
+            return self.process_function_call(line)
+        
         # 1. Declaração de variáveis
         if any(line.startswith(tipo + ' ') for tipo in self.type_map):
             self.process_variable_declaration(line)
@@ -647,84 +657,91 @@ class TiaRuivaCompiler:
         except Exception as e:
             raise RuntimeError(f"Erro no processamento do print: {str(e)}")
 
-    def process_function_declaration(self, lines, start_idx):
-        decl_line = lines[start_idx]
-        match = re.match(r'PENSÃO DA TIA RUIVA RECEBE (\w+)\(([^)]*)\)', decl_line)
-        if not match:
-            raise SyntaxError(f"Declaração de função inválida: {decl_line}")
+    def process_function_declaration(self, line):
+        try:
+            # Padrão: PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
+            match = re.match(
+                r'PENSÃO DA TIA RUIVA RECEBE\s*\((\w+)\s+(\w+)\(((?:\w+\s+\w+,?\s*)*)\)\)', 
+                line
+            )
+            if not match:
+                raise SyntaxError("Sintaxe inválida para declaração de função")
             
-        func_name = match.group(1)
-        params = [p.strip() for p in match.group(2).split(',') if p.strip()]
+            return_type = match.group(1)
+            func_name = match.group(2)
+            params = [p.strip() for p in match.group(3).split(',') if p.strip()]
+            
+            # Armazena a função no contexto global
+            self.global_functions[func_name] = {
+                'return_type': return_type,
+                'params': params,
+                'body': []
+            }
+            self.current_function = func_name
+            
+        except Exception as e:
+            raise RuntimeError(f"Erro na declaração de função: {str(e)}")
+    
+    
+    def process_function_body(self, lines, start_idx):
+        func_name = self.current_function
+        i = start_idx
         
-        param_list = []
-        for p in params:
-            type_name = p.split()
-            if len(type_name) != 2:
-                raise SyntaxError(f"Parâmetro de função inválido: {p}")
-            param_list.append(type_name[1])
-        
-        body = []
-        i = start_idx + 1
         while i < len(lines) and lines[i].strip() != 'uuuuh':
-            body.append(lines[i])
+            line = lines[i].strip()
+            self.global_functions[func_name]['body'].append(line)
             i += 1
         
-        self.current_context()['functions'][func_name] = {
-            'params': param_list,
-            'body': body
-        }
+        self.current_function = None
+        return i + 1  # Retorna a linha após o 'uuuuh'
         
-        return i + 1
-
     def process_function_call(self, line):
-        match = re.match(r'(\w+\s+\w+\s*=\s*)?PENSÃO DA TIA RUIVA ENTREGA (\w+)\(([^)]*)\);', line)
-        if not match:
-            raise SyntaxError(f"Chamada de função inválida: {line}")
-            
-        func_name = match.group(2)
-        args = [self.evaluate_expression(a.strip()) for a in match.group(3).split(',') if a.strip()]
-        
-        func_def = None
-        for context in reversed(self.context_stack):
-            if func_name in context['functions']:
-                func_def = context['functions'][func_name]
-                break
-        
-        if not func_def:
-            raise NameError(f"Função não definida: {func_name}")
-            
-        if len(args) != len(func_def['params']):
-            raise TypeError(f"Número incorreto de argumentos para {func_name}")
-        
-        new_context = {
-            'vars': dict(zip(func_def['params'], args)),
-            'functions': {}
-        }
-        
-        self.context_stack.append(new_context)
-        
-        result = None
-        body_code = '\n'.join(func_def['body'])
         try:
-            self.compile_and_run(body_code)
-        except Exception as e:
+            # Padrão: PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B)
+            match = re.match(r'PENSÃO DA TIA RUIVA ENTREGA\s+(\w+)\(([^)]*)\)', line)
+            if not match:
+                raise SyntaxError("Sintaxe inválida para chamada de função")
+            
+            func_name = match.group(1)
+            args = [arg.strip() for arg in match.group(2).split(',') if arg.strip()]
+            
+            # Verifica se função existe
+            if func_name not in self.global_functions:
+                raise NameError(f"Função '{func_name}' não definida")
+            
+            func_def = self.global_functions[func_name]
+            
+            # Verifica número de parâmetros
+            if len(args) != len(func_def['params']):
+                raise TypeError(f"Número incorreto de argumentos para {func_name}")
+            
+            # Cria novo contexto com parâmetros
+            new_scope = {'vars': {}, 'functions': {}}
+            
+            # Mapeia parâmetros (Alex A → A)
+            for param_decl, arg in zip(func_def['params'], args):
+                param_parts = param_decl.split()
+                param_name = param_parts[-1]  # Pega só o nome
+                new_scope['vars'][param_name] = self.evaluate_expression(arg)
+            
+            self.context_stack.append(new_scope)
+            
+            # Executa o corpo
+            result = None
+            for line in func_def['body']:
+                if line.startswith('RETORNA ESSA MERDA'):
+                    return_expr = line[18:].strip(' ;')
+                    result = self.evaluate_expression(return_expr)
+                    break
+                self.execute_line(line)
+            
             self.context_stack.pop()
-            raise e
+            return result
+            
+        except Exception as e:
+            raise RuntimeError(f"Erro na chamada de função: {str(e)}")
+    
         
-        if hasattr(self, 'last_return'):
-            result = self.last_return
-            delattr(self, 'last_return')
-        
-        self.context_stack.pop()
-        
-        if match.group(1):
-            var_decl = match.group(1).strip()
-            if '=' in var_decl:
-                var_name = var_decl.split('=')[0].strip().split()[-1]
-                self.global_vars[var_name] = result
-        
-        return result
-
     def process_return(self, line):
         expr = re.match(r'RETORNA ESSA MERDA (.*?);', line).group(1)
         result = self.evaluate_expression(expr)
