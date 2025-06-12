@@ -154,7 +154,7 @@ class TiaRuivaCompiler:
             
         # 5. Loops
         elif line.startswith('Anteriormente nessa porra'):
-            self.process_while_loop(line)
+            self.process_while(line)
             return
         elif line.startswith('KENDRA FOXTI'):
             self.process_for_loop([line], 0)  # Passa como lista para processar blocos
