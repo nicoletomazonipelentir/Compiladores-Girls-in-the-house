@@ -1,38 +1,5 @@
-// Função para calcular fatorial
-PENSÃO DA TIA RUIVA RECEBE FAT(Alex n)
-    Alex resultado = 1;
-    KENDRA FOXTI (i = 1; i <= n; i++)
-        resultado = resultado * i;
-        uuuuh
-    RETORNA ESSA MERDA resultado;
+Open the door and have fun
+KENDRA FOXTI (Alex M = 1; M < 5; M++)
+     DISK DUNNY(M);
     uuuuh
-
-// Programa principal
-Alex num = 5;
-DISK DUNNY("Calculando fatorial de ");
-DISK DUNNY(num);
-
-Alex res = PENSÃO DA TIA RUIVA ENTREGA FAT(num);
-DISK DUNNY("Resultado: ");
-DISK DUNNY(res);
-
-// Exemplo de if/else
-A Katia já foi uma grande mulher (res > 100)
-    DISK DUNNY("É grande!");
-    uuuuh
-Caralhetee (res > 50)
-    DISK DUNNY("É médio!");
-    uuuuh
-Ja fui uma grande mulher
-    DISK DUNNY("É pequeno!");
-    uuuuh
-
-// Exemplo de while
-Alex contador = 3;
-Anteriormente nessa porra (contador > 0)
-    DISK DUNNY("Contagem: ");
-    DISK DUNNY(contador);
-    contador = contador - 1;
-    uuuuh
-
-DISK DUNNY("Fim do programa!");
+uuuuh

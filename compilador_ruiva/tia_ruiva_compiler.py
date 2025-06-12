@@ -2,125 +2,445 @@ import re
 
 class TiaRuivaCompiler:
     def __init__(self):
+        self.variables = {}
+        self.reset()
+        
+    def reset(self):
+        self.variables = {}
         # Mapeamento de tipos
         self.type_map = {
             'Duny': str,    # char
             'Shaft': int,   # short
-            'Alex': int,     # int
-            'Todd': int,     # long
+            'Alex': int,    # int
+            'Todd': int,    # long
             'Honey': float, # float
             'Priscilao': float, # double
-            'Julie': int     # unsigned
+            'Julie': int    # unsigned
         }
         
-        # Variáveis declaradas
-        self.variables = {}
+        # Variáveis globais
+        self.global_vars = {}
         
-        # Funções definidas
-        self.functions = {}
-        
-        # Pilha de contexto (para if/else/while)
-        self.context_stack = []
+        # Pilha de contexto para funções (armazena variáveis locais)
+        self.context_stack = [{'vars': {}, 'functions': {}}]
         
         # Saída do programa
         self.output = []
+        
+        # Controle de fluxo
+        self.flow_control = None
+
+    def current_context(self):
+        return self.context_stack[-1]
 
     def compile_and_run(self, code):
-        lines = code.split('\n')
+        lines = [line.strip() for line in code.split('\n') if line.strip() and not line.strip().startswith('//')]
+
+        if not lines:
+            raise RuntimeError("Código vazio")
+
+        # Verificar abertura e fechamento
+        if lines[0] != 'Open the door and have fun':
+            raise RuntimeError("O código deve começar com 'Open the door and have fun'")
+        if lines[-1] != 'uuuuh':
+            raise RuntimeError("O código deve terminar com 'uuuuh'")
+
+        # Remover a primeira e última linhas
+        lines = lines[1:-1]
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            try:
+                if line.startswith('KENDRA FOXTI'):
+                    i = self.process_for_loop(lines, i)
+                else:
+                    self.execute_line(line)
+                    i += 1
+            except Exception as e:
+                raise RuntimeError(f"Erro na linha {i+2}: {line}\n{str(e)}")
+
+    def get_block(self, lines, start_idx):
+        #"""Captura um bloco de código até encontrar 'uuuuh'"""
+        block = []
+        i = start_idx
+        while i < len(lines):
+            if lines[i].strip() == 'uuuuh':
+                return block, i
+            block.append(lines[i])
+            i += 1
+        raise RuntimeError("Bloco não terminado com 'uuuuh'")
+    
+    
+    def execute_block(self, lines):
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            if not line or line.startswith('//'):
-                i += 1
+
+            # Detecta if
+            if line.startswith("A Katia já foi uma grande mulher"):
+                i = self.process_if_else(lines, i)
+                continue  # já atualizou i, continuar do próximo
+            # Detecta prints
+            elif line.startswith("DISK DUNNY"):
+                self.process_print(line)
+            # Detecta declaração de variáveis
+            elif any(line.startswith(t + " ") for t in self.type_map):
+                self.process_variable_declaration(line)
+            # Detecta atribuição simples
+            elif "=" in line:
+                self.process_assignment(line)
+            # Detecta while
+            elif line.startswith("Anteriormente nessa porra"):
+                i = self.process_while(lines, i)
                 continue
+            # Pode adicionar mais reconhecimentos aqui...
+
+            i += 1
+
+    def execute_line(self, line):
+        line = line.strip()
+
+        # Se for incremento pós-fixado do tipo "M++"
+        if re.match(r'^\w+\+\+$', line):
+            var = line[:-2]  # tira os dois últimos caracteres '++'
+            # transforma em atribuição normal: M = M + 1
+            line = f"{var} = {var} + 1"
+
+        # Agora executa normalmente (chame seu process_assignment ou o que for)
+        if '=' in line:
+            self.process_assignment(line)
+            if re.match(r'^\w+\+\+;?$', line):
+                var = line.replace('+', '').replace(';', '')
+                self.execute_line(f"{var} = {var} + 1")
+                return
+            elif re.match(r'^\w+--;?$', line):
+                var = line.replace('-', '').replace(';', '')
+                self.execute_line(f"{var} = {var} - 1")
+                return
+            # 1. Detecta declaração de variáveis (deve vir primeiro)
+            if any(line.startswith(tipo + ' ') for tipo in self.type_map):
+                self.process_variable_declaration(line)
+                return
                 
-            try:
-                # Processar declaração de função
-                if 'PENSÃO DA TIA RUIVA RECEBE' in line:
-                    i = self.process_function_declaration(lines, i)
-                    
-                # Processar declaração de variáveis
-                elif any(type_word in line for type_word in self.type_map):
-                    self.process_variable_declaration(line)
-                    
-                # Processar prints
-                elif line.startswith('DISK DUNNY'):
+            # 2. Detecta prints
+            elif line.startswith('DISK DUNNY'):
+                self.process_print(line)
+                return
+            
+            elif line.startswith('KENDRA FOXTI'):
                     self.process_print(line)
-                    
-                # Processar if/else if/else
-                elif line.startswith('A Katia já foi uma grande mulher') or \
-                     line.startswith('Caralhetee') or \
-                     line.startswith('Ja fui uma grande mulher'):
-                    i = self.process_conditional(lines, i)
-                    
-                # Processar while
-                elif line.startswith('Anteriormente nessa porra'):
-                    i = self.process_while(lines, i)
-                    
-                # Processar for
-                elif line.startswith('KENDRA FOXTI'):
-                    i = self.process_for(lines, i)
-                    
-                # Processar chamada de função
-                elif 'PENSÃO DA TIA RUIVA ENTREGA' in line:
-                    self.process_function_call(line)
-                    
-                # Processar retorno de função
-                elif line.startswith('RETORNA ESSA MERDA'):
-                    return self.process_return(line)
-                    
-                # Processar continue/break
-                elif line == 'DOMENICA;':  # continue
-                    return 'continue'
-                elif line == 'EU TENHO MAIS O QUE FAZER;':  # break
-                    return 'break'
-                    
-                # Processar incremento/decremento
-                elif '++' in line or '--' in line:
-                    self.process_increment_decrement(line)
-                    
-                # Processar uuuuh (ignorar)
-                elif line == 'uuuuh':
-                    pass
-                    
-                # Processar atribuição simples
-                elif '=' in line and not any(kw in line for kw in ['if', 'while', 'for']):
-                    self.process_assignment(line)
-                    
-                i += 1
-            except Exception as e:
-                raise RuntimeError(f"Erro na linha {i+1}: {str(e)}")
-        
+                    return
+            # 3. Detecta atribuições (ex: X = 10;)
+            elif '=' in line and not line.startswith(('A Katia', 'Anteriormente')):
+                self.process_assignment(line)
+                return
+                
+            # 4. Detecta condicionais (if)
+            elif line.startswith('A Katia já foi uma grande mulher'):
+                self.process_if(line)
+                return
+                
+            # 5. Detecta loops (while)
+            elif line.startswith('Anteriormente nessa porra'):
+                self.process_while(line)
+                return
+                
+            # 6. Detecta continue/break
+            elif line == 'DOMENICA;':
+                self.flow_control = 'continue'
+                return
+            elif line == 'EU TENHO MAIS O QUE FAZER;':
+                self.flow_control = 'break'
+                return
+                
+            # 7. Detecta declaração de função
+            elif line.startswith('PENSÃO DA TIA RUIVA RECEBE'):
+                self.process_function_declaration(line)
+                return
+                
+            # 8. Detecta chamada de função
+            elif 'PENSÃO DA TIA RUIVA ENTREGA' in line:
+                self.process_function_call(line)
+                return
+                
+            # 9. Detecta return
+            elif line.startswith('RETORNA ESSA MERDA'):
+                self.process_return(line)
+                return
+                
+            # 10. Linha vazia ou comentário (já filtrado anteriormente)
+            elif not line or line.startswith('//'):
+                return
+                
+            # 11. Comando não reconhecido
+            else:
+                raise SyntaxError(f"Comando não reconhecido: {line}")
+
+
+    def get_value(self, var):
+        var = var.strip()
+        if var in self.variables:
+            return self.variables[var]
+        try:
+            return int(var)
+        except ValueError:
+            try:
+                return float(var)
+            except ValueError:
+                raise Exception(f"Variável ou valor inválido: {var}")
+
+    def process_for_loop(self, lines, start_idx):
+        try:
+            line = lines[start_idx]
+            match = re.match(r'KENDRA FOXTI\s*\((.*?)\s*;\s*(.*?)\s*;\s*(.*?)\)', line)
+            if not match:
+                raise SyntaxError("Sintaxe inválida do for loop")
+                
+            init, condition, increment = match.groups()
+            
+            # Executa inicialização
+            self.execute_line(init)
+            
+            # Se a variável da condição não existe, inicialize com zero
+            # Assumindo que a condição é no formato 'VAR < valor'
+            var_cond = condition.split()[0]
+            if var_cond not in self.variables:
+                self.variables[var_cond] = 0
+            
+            block, end_idx = self.get_block(lines, start_idx + 1)
+            
+            while True:
+                if not self.evaluate_expression(condition):
+                    break
+                
+                self.execute_block(block)
+                
+                # Tratar incremento do tipo M++
+                inc_line = increment.strip()
+                if re.match(r'^\w+\+\+$', inc_line):
+                    var_inc = inc_line[:-2]
+                    inc_line = f"{var_inc} = {var_inc} + 1"
+                self.execute_line(inc_line)
+            
+            return end_idx
+        except Exception as e:
+            raise RuntimeError(f"Erro no for loop: {str(e)}")
+
+
+
+
+    def process_if_else(self, lines, start_idx):
+        line = lines[start_idx].strip()
+        print(f"process_if_else: processando linha {start_idx}: {line}")
+        match = re.match(r'A Katia já foi uma grande mulher\s*\((.*)\)', line)
+        if not match:
+            raise SyntaxError(f"Condicional if inválida: {line}")
+        condition = match.group(1)
+        cond_value = self.evaluate_expression(condition)
+        print(f"process_if_else: condição '{condition}' avaliada como {cond_value}")
+
+        body = []
+        i = start_idx + 1
+        while i < len(lines):
+            if lines[i].strip() in ('uuuuh;', 'uuuuh'):
+                print(f"process_if_else: fim do bloco encontrado na linha {i}: {lines[i].strip()}")
+                break
+            body.append(lines[i])
+            i += 1
+
+        if cond_value:
+            print(f"process_if_else: executando bloco com {len(body)} linhas")
+            self.execute_block(body)
+        else:
+            print("process_if_else: condição falsa, bloco ignorado")
+
+        print(f"process_if_else: retornando próxima linha {i + 1}")
+        return i + 1
+
+    def process_conditional(self, lines, start_idx):
+        i = start_idx
+        executed_block = False
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # if
+            if line.startswith('A Katia já foi uma grande mulher'):
+                if executed_block:
+                    # já executou algum bloco antes, pular esse
+                    i = self.skip_block(lines, i+1)
+                else:
+                    i = self.process_if_else(lines, i)
+                    executed_block = True
+
+            # else if
+            elif line.startswith('Caralhetee'):
+                if executed_block:
+                    i = self.skip_block(lines, i+1)
+                else:
+                    i = self.process_else_if(lines, i)
+                    executed_block = True
+
+            # else
+            elif line.startswith('Ja fui uma grande mulher'):
+                if executed_block:
+                    # pula bloco else
+                    i = self.skip_block(lines, i+1)
+                else:
+                    i = self.process_else(lines, i)
+                    executed_block = True
+
+            else:
+                # Se não for nenhuma das condicionais, para o loop
+                break
+
+        return i
+
+    def skip_block(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines):
+            if lines[i].strip() in ('uuuuh;', 'uuuuh'):
+                return i + 1
+            i += 1
+        return i
+
+    def get_next_block(self):
+        block = []
+        while True:
+            line = self.get_next_line()  # Você precisará implementar isso
+            if line is None:
+                raise SyntaxError("Bloco não terminado com 'uuuuh'")
+            if line.strip() == 'uuuuh':
+                break
+            block.append(line)
+        return block
+    
+    def get_next_line(self):
+        if hasattr(self, 'current_line_index'):
+            self.current_line_index += 1
+            if self.current_line_index < len(self.lines):
+                return self.lines[self.current_line_index]
         return None
+    
+    
+
+    def process_assignment(self, line):
+        if '=' not in line:
+            raise Exception("Atribuição mal formada")
+
+        var, value = line.split('=', 1)  # melhor garantir só uma divisão
+        var = var.strip()
+        value = value.strip()
+
+        if '+' in value:
+            left, right = value.split('+')
+            left = left.strip()
+            right = int(right.strip())
+            if left == var:
+                self.variables[var] += right
+            else:
+                raise Exception("Expressão inválida na atribuição")
+        else:
+            try:
+                self.variables[var] = int(value)
+            except ValueError:
+                self.variables[var] = value
+
+
+
+
+
+    def process_increment(self, line):
+        if line.startswith("INCREMENTA"):
+            var = line.split()[1]
+            if var in self.variables:
+                self.variables[var] += 1
+            else:
+                raise Exception(f"Variável '{var}' não definida para incremento")
+
+
+
+
+    
+    def process_while(self, lines, i):
+        line = lines[i]
+        condition_start = line.find('(') + 1
+        condition_end = line.rfind(')')
+        condition = line[condition_start:condition_end].strip()
+
+        block_lines = []
+        i += 1
+
+        # Coletar o bloco do while
+        while i < len(lines) and lines[i] != 'uuuuh;':
+            block_lines.append(lines[i])
+            i += 1
+
+        # Ignorar o 'uuuuh;'
+        i += 1
+
+        # Executar enquanto a condição for verdadeira
+        while self.evaluate_expression(condition):
+            for inner_line in block_lines:
+                # Permitir break e continue personalizados
+                self.flow_control = None
+                self.execute_line(inner_line)
+
+                if self.flow_control == 'break':
+                    return i  # sai do while
+                elif self.flow_control == 'continue':
+                    break  # volta para o while sem terminar o bloco
+
+        return i  # retorna a próxima linha após o bloco
+
 
     def process_variable_declaration(self, line):
-        # Exemplo: Alex X = 5;
-        parts = re.match(r'(\w+)\s+(\w+)\s*=\s*(.*?);', line)
-        if not parts:
-            raise SyntaxError(f"Declaração de variável inválida: {line}")
+        try:
+            # Padrão para: "Tipo nome = valor" (ponto e vírgula opcional)
+            match = re.match(r'(\w+)\s+(\w+)\s*(?:=\s*(.*?)\s*)?;?$', line)
+            if not match:
+                raise SyntaxError(f"Declaração inválida: {line}")
             
-        var_type = parts.group(1)
-        var_name = parts.group(2)
-        var_value = self.evaluate_expression(parts.group(3))
-        
-        if var_type in self.type_map:
-            self.variables[var_name] = self.type_map[var_type](var_value)
+            tipo, nome, valor = match.groups()
+            
+            if tipo not in self.type_map:
+                raise SyntaxError(f"Tipo desconhecido: {tipo}")
+            
+            # Se não tiver valor, inicializa com padrão
+            if valor is None or valor.strip() == '':
+                valor_avaliado = 0 if self.type_map[tipo] == int else 0.0 if self.type_map[tipo] == float else ''
+            else:
+                # Remove qualquer ponto e vírgula residual antes de avaliar
+                valor = valor.rstrip(';').strip()
+                valor_avaliado = self.evaluate_expression(valor)
+            
+            # Converte para o tipo correto
+            self.current_context()['vars'][nome] = self.type_map[tipo](valor_avaliado)
+            
+        except Exception as e:
+            raise RuntimeError(f"Erro na declaração de variável '{nome}': {str(e)}")
 
     def process_print(self, line):
-        # Exemplo: DISK DUNNY("Hello"); ou DISK DUNNY(var);
-        match = re.match(r'DISK DUNNY\((.*?)\);', line)
-        if not match:
-            raise SyntaxError(f"Comando print inválido: {line}")
+        try:
+            match = re.match(r'DISK DUNNY\((.+)\);?', line)
+            if not match:
+                raise ValueError(f"Sintaxe inválida no print: {line}")
             
-        content = match.group(1)
-        
-        # Se estiver entre aspas, é string literal
-        if content.startswith('"') and content.endswith('"'):
-            self.output.append(content[1:-1])
-        else:
-            # É uma variável ou expressão
-            value = self.evaluate_expression(content)
-            self.output.append(str(value))
+            content = match.group(1).strip()
+            
+            # Se for string literal
+            if content.startswith('"') and content.endswith('"'):
+                print(content[1:-1])  # Remove as aspas
+            else:
+                # Se for variável ou expressão
+                try:
+                    value = self.evaluate_expression(content)
+                    print(str(value))
+                except Exception as e:
+                    raise ValueError(f"Erro ao avaliar expressão '{content}': {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Erro no processamento do print: {str(e)}")
 
     def process_function_declaration(self, lines, start_idx):
         # Exemplo: PENSÃO DA TIA RUIVA RECEBE FAT(Alex n)
@@ -147,13 +467,13 @@ class TiaRuivaCompiler:
             body.append(lines[i])
             i += 1
         
-        # Armazenar a função
-        self.functions[func_name] = {
+        # Armazenar a função no contexto atual
+        self.current_context()['functions'][func_name] = {
             'params': param_list,
             'body': body
         }
         
-        return i  # Retorna o índice da linha após a função
+        return i + 1  # Retorna o índice da linha após o uuuuh
 
     def process_function_call(self, line):
         # Exemplo: Alex res = PENSÃO DA TIA RUIVA ENTREGA FAT(num);
@@ -164,186 +484,116 @@ class TiaRuivaCompiler:
         func_name = match.group(2)
         args = [self.evaluate_expression(a.strip()) for a in match.group(3).split(',') if a.strip()]
         
-        if func_name not in self.functions:
+        # Procurar a função na hierarquia de contextos
+        func_def = None
+        for context in reversed(self.context_stack):
+            if func_name in context['functions']:
+                func_def = context['functions'][func_name]
+                break
+        
+        if not func_def:
             raise NameError(f"Função não definida: {func_name}")
             
-        func = self.functions[func_name]
-        
-        if len(args) != len(func['params']):
+        if len(args) != len(func_def['params']):
             raise TypeError(f"Número incorreto de argumentos para {func_name}")
         
-        # Salvar variáveis atuais
-        old_vars = self.variables.copy()
+        # Criar novo contexto para a função
+        new_context = {
+            'vars': dict(zip(func_def['params'], args)),
+            'functions': {}
+        }
         
-        # Criar variáveis locais para os parâmetros
-        for param, arg in zip(func['params'], args):
-            self.variables[param] = arg
+        self.context_stack.append(new_context)
         
         # Executar o corpo da função
         result = None
-        body_code = '\n'.join(func['body'])
-        self.compile_and_run(body_code)
+        body_code = '\n'.join(func_def['body'])
+        try:
+            self.compile_and_run(body_code)
+        except Exception as e:
+            self.context_stack.pop()
+            raise e
         
-        # Restaurar variáveis
-        self.variables = old_vars
+        # Se houve retorno explícito, pegar o valor
+        if hasattr(self, 'last_return'):
+            result = self.last_return
+            delattr(self, 'last_return')
+        
+        # Remover o contexto da função
+        self.context_stack.pop()
         
         # Se a atribuição foi especificada, armazenar o resultado
         if match.group(1):
             var_decl = match.group(1).strip()
             if '=' in var_decl:
                 var_name = var_decl.split('=')[0].strip().split()[-1]
-                self.variables[var_name] = result
+                self.global_vars[var_name] = result
         
         return result
-
-    def process_conditional(self, lines, start_idx):
-        # Processa if/else if/else
-        current_line = lines[start_idx]
-        
-        # Determinar o tipo de condicional
-        if current_line.startswith('A Katia já foi uma grande mulher'):
-            cond_type = 'if'
-            condition = re.match(r'A Katia já foi uma grande mulher \((.*)\)', current_line).group(1)
-        elif current_line.startswith('Caralhetee'):
-            cond_type = 'else if'
-            condition = re.match(r'Caralhetee \((.*)\)', current_line).group(1)
-        else:  # Ja fui uma grande mulher
-            cond_type = 'else'
-            condition = None
-        
-        # Avaliar a condição (se houver)
-        cond_result = None
-        if condition:
-            cond_result = self.evaluate_expression(condition)
-        
-        # Encontrar o bloco de código
-        block = []
-        i = start_idx + 1
-        while i < len(lines) and not any(lines[i].strip().startswith(s) for s in ['A Katia', 'Caralhetee', 'Ja fui']) and lines[i].strip() != 'uuuuh':
-            block.append(lines[i])
-            i += 1
-        
-        # Executar se a condição for verdadeira
-        if cond_type == 'if' and cond_result:
-            self.compile_and_run('\n'.join(block))
-            # Pular qualquer else/else if relacionado
-            while i < len(lines) and (lines[i].strip().startswith('Caralhetee') or lines[i].strip().startswith('Ja fui')):
-                i += 1
-                # Pular o bloco
-                while i < len(lines) and lines[i].strip() != 'uuuuh':
-                    i += 1
-        elif cond_type == 'else if' and cond_result and not self.context_stack[-1].get('executed', False):
-            self.compile_and_run('\n'.join(block))
-            self.context_stack[-1]['executed'] = True
-        elif cond_type == 'else' and not self.context_stack[-1].get('executed', False):
-            self.compile_and_run('\n'.join(block))
-        
-        return i
-
-    def process_while(self, lines, start_idx):
-        # Exemplo: Anteriormente nessa porra (X > 2)
-        current_line = lines[start_idx]
-        condition = re.match(r'Anteriormente nessa porra \((.*)\)', current_line).group(1)
-        
-        # Encontrar o bloco de código
-        block = []
-        i = start_idx + 1
-        while i < len(lines) and lines[i].strip() != 'uuuuh':
-            block.append(lines[i])
-            i += 1
-        
-        # Executar o loop while
-        while self.evaluate_expression(condition):
-            result = self.compile_and_run('\n'.join(block))
-            if result == 'break':
-                break
-            if result == 'continue':
-                continue
-        
-        return i
-
-    def process_for(self, lines, start_idx):
-        # Exemplo: KENDRA FOXTI (i = 1; i <= n; i++)
-        current_line = lines[start_idx]
-        match = re.match(r'KENDRA FOXTI\s*\(([^;]+);([^;]+);([^)]+)\)', current_line)
-        if not match:
-            raise SyntaxError(f"Sintaxe de for inválida: {current_line}")
-        
-        init = match.group(1).strip()
-        condition = match.group(2).strip()
-        increment = match.group(3).strip()
-        
-        # Executar a inicialização
-        self.process_assignment(init)
-        
-        # Encontrar o bloco de código
-        block = []
-        i = start_idx + 1
-        while i < len(lines) and lines[i].strip() != 'uuuuh':
-            block.append(lines[i])
-            i += 1
-        
-        # Executar o loop for
-        while self.evaluate_expression(condition):
-            result = self.compile_and_run('\n'.join(block))
-            if result == 'break':
-                break
-            if result == 'continue':
-                self.process_assignment(increment)
-                continue
-            
-            # Executar o incremento
-            self.process_assignment(increment)
-        
-        return i
-
-    def process_assignment(self, line):
-        # Exemplo: X = 5; ou X--;
-        if '=' in line:
-            var, expr = line.split('=', 1)
-            var = var.strip()
-            value = self.evaluate_expression(expr)
-            self.variables[var] = value
-        elif '++' in line:
-            var = line.split('++')[0].strip()
-            self.variables[var] += 1
-        elif '--' in line:
-            var = line.split('--')[0].strip()
-            self.variables[var] -= 1
 
     def process_return(self, line):
         # Exemplo: RETORNA ESSA MERDA 1;
         expr = re.match(r'RETORNA ESSA MERDA (.*?);', line).group(1)
-        return self.evaluate_expression(expr)
+        result = self.evaluate_expression(expr)
+        self.last_return = result
+        return result
 
     def evaluate_expression(self, expr):
-        # Avalia uma expressão matemática ou variável
+        local_vars = self.variables.copy()
         try:
-            # Tenta avaliar como expressão Python (com substituição de variáveis)
-            for var in self.variables:
-                expr = expr.replace(var, str(self.variables[var]))
-            return eval(expr)
-        except:
-            # Se falhar, pode ser uma string ou variável não encontrada
-            if expr in self.variables:
-                return self.variables[expr]
-            raise ValueError(f"Expressão inválida ou variável não definida: {expr}")
+            return eval(expr, {}, local_vars)
+        except Exception as e:
+            raise RuntimeError(f"Erro ao avaliar expressão '{expr}': {e}")
+        
+        expr = expr.strip().rstrip(';')
+
+        # Verifica se é uma string entre aspas
+        if expr.startswith('"') and expr.endswith('"'):
+            return expr[1:-1]
+
+        # Procura variáveis nos contextos
+        for context in reversed(self.context_stack):
+            if expr in context['vars']:
+                return context['vars'][expr]
+
+        # Tenta avaliar como expressão usando variáveis do contexto atual
+        try:
+            # Monta dicionário com todas as variáveis acessíveis
+            local_vars = {}
+            for context in self.context_stack:
+                local_vars.update(context['vars'])
+            local_vars.update(self.global_vars)
+
+            return eval(expr, {}, local_vars)
+        except Exception as e:
+            raise ValueError(f"Não foi possível avaliar a expressão '{expr}': {str(e)}")
+
 
     def get_output(self):
         return '\n'.join(self.output)
+    
+    def show_variables(self):
+        print("\nVariáveis declaradas:")
+        for nome, valor in self.current_context()['vars'].items():
+            print(f"{nome} = {valor} (tipo: {type(valor).__name__})")
 
+# Adicione esta função no nível raiz do arquivo (sem indentação)
 def run_ruiva_file(filename):
     with open(filename, 'r', encoding='utf-8') as f:
         code = f.read()
     
     compiler = TiaRuivaCompiler()
-    compiler.compile_and_run(code)
-    print(compiler.get_output())
+    try:
+        compiler.compile_and_run(code)
+    except Exception as e:
+        print(f"Erro durante a execução: {str(e)}")
 
+# O bloco main deve vir depois de todas as definições
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print("Uso: python tia_ruiva_compiler.py arquivo.ruiva")
+        print("Uso: python tia_ruiva_compiler.py hello.ruiva")
         sys.exit(1)
     
     run_ruiva_file(sys.argv[1])
+
