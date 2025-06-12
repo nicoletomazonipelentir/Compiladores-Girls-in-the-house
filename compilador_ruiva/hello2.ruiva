@@ -9,3 +9,8 @@ Andreia
 problema: Hello, Mutante
 Mutante
 Hello if ta mostrando todos
+
+problema while
+PS C:\Users\nicol\OneDrive\Desktop\andreia\Compiladores-Girls-in-the-house\compilador_ruiva> python tia_ruiva_compiler.py hello.ruiva
+Erro durante a execução: Erro na linha 2: Anteriormente nessa porra (X < 10)
+TiaRuivaCompiler.process_while() missing 1 required positional argument: 'start_idx'
