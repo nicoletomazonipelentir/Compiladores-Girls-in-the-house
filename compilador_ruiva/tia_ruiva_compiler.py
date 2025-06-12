@@ -2,14 +2,7 @@ import re
 
 class TiaRuivaCompiler:
     def __init__(self):
-        FLOW_CONTINUE = 'DOMENICA;'
-        FLOW_BREAK = 'EU TENHO MAIS O QUE FAZER;'
         self.variables = {}
-        self.reset()
-        
-    def reset(self):
-        self.variables = {}
-        # Mapeamento de tipos
         self.type_map = {
             'Duny': str,    # char
             'Shaft': int,   # short
@@ -19,6 +12,15 @@ class TiaRuivaCompiler:
             'Priscilao': float, # double
             'Julie': int    # unsigned
         }
+        self.FLOW_CONTINUE = "DOMENICA;"
+        self.FLOW_BREAK = "EU TENHO MAIS O QUE FAZER;"
+        self.flow_control = None
+        self.global_vars = {}
+        self.context_stack = [{'vars': {}, 'functions': {}}]
+        self.output = []
+    
+    def reset(self):
+        self.variables = {}
         
         # Variáveis globais
         self.global_vars = {}
@@ -449,9 +451,10 @@ class TiaRuivaCompiler:
     
     def process_while(self, lines, start_idx):
         line = lines[start_idx]
+        # Extrai condição removendo espaços extras
         condition = line[line.find('(')+1:line.rfind(')')].strip()
         
-        # Pega todo o bloco do while
+        # Pega o bloco do while
         block_lines = []
         i = start_idx + 1
         while i < len(lines) and lines[i].strip() != 'uuuuh':
@@ -465,21 +468,18 @@ class TiaRuivaCompiler:
                 self.execute_line(inner_line)
                 
                 if self.flow_control == 'break':
-                    return i + 1  # Sai do while completamente
+                    return i + 1  # Sai do while
                 elif self.flow_control == 'continue':
                     break  # Pula para próxima iteração
             
-            # Se foi break, já saiu
             if self.flow_control == 'break':
                 break
                 
-            # Atualiza a condição
+            # Atualiza condição se não foi continue
             if self.flow_control != 'continue':
-                pass  # Fluxo normal
-                
-            self.flow_control = None
-        
-        return i + 1  # Retorna a linha após o 'uuuuh'
+                pass  # Adicione lógica de atualização se necessário
+            
+        return i + 1
 
 
     def process_variable_declaration(self, line):
