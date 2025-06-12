@@ -15,12 +15,16 @@ class Parser:
     def parse(self):
         statements = []
         while self.current_token:
-            if self.current_token[0] in ['INT', 'CHAR', 'LONG']:
+            if self.current_token[0] in ['INT', 'CHAR', 'LONG', 'SHORT']:
                 statements.append(self.parse_declaration())
             elif self.current_token[0] == 'FOR':
                 statements.append(self.parse_for())
+            elif self.current_token[0] == 'WHILE':
+                statements.append(self.parse_while())
             elif self.current_token[1] == 'DISK DUNNY':
                 statements.append(self.parse_print())
+            elif self.current_token[0] == 'IF':
+                statements.append(self.parse_if())
             else:
                 self.next_token()
         return statements
@@ -39,10 +43,66 @@ class Parser:
     
     def parse_for(self):
         self.next_token()  # Pula 'KENDRA FOXTI'
-        # Implementar lógica para parse do for
-        pass
+        self.expect('OPEN_PAREN')
+        init = self.parse_declaration() if self.current_token[0] in ['INT', 'CHAR', 'LONG'] else None
+        self.expect('SEMICOLON')
+        condition = self.parse_expression()
+        self.expect('SEMICOLON')
+        increment = self.parse_expression()
+        self.expect('CLOSE_PAREN')
+        body = self.parse_block()
+        return ('FOR', init, condition, increment, body)
+    
+    def parse_while(self):
+        self.next_token()  # Pula 'Anteriormente nessa porra'
+        self.expect('OPEN_PAREN')
+        condition = self.parse_expression()
+        self.expect('CLOSE_PAREN')
+        body = self.parse_block()
+        return ('WHILE', condition, body)
+    
+    def parse_if(self):
+        self.next_token()  # Pula 'A Katia já foi uma grande mulher'
+        self.expect('OPEN_PAREN')
+        condition = self.parse_expression()
+        self.expect('CLOSE_PAREN')
+        then_branch = self.parse_block()
+        else_branch = None
+        if self.current_token and self.current_token[1] in ['Caralhetee', 'Ja fui uma grande mulher']:
+            self.next_token()
+            else_branch = self.parse_block()
+        return ('IF', condition, then_branch, else_branch)
     
     def parse_print(self):
         self.next_token()  # Pula 'DISK DUNNY'
-        # Implementar lógica para parse do print
-        pass
+        self.expect('OPEN_PAREN')
+        value = self.current_token[1]
+        self.next_token()
+        self.expect('CLOSE_PAREN')
+        return ('PRINT', value)
+    
+    def parse_block(self):
+        statements = []
+        while self.current_token and self.current_token[1] != 'uuuuh':
+            statements.append(self.parse())
+        if self.current_token and self.current_token[1] == 'uuuuh':
+            self.next_token()
+        return statements
+    
+    def parse_expression(self):
+        # Implementação simplificada - na prática seria mais complexa
+        left = self.current_token[1]
+        self.next_token()
+        if self.current_token and self.current_token[0] == 'OPERATOR':
+            op = self.current_token[1]
+            self.next_token()
+            right = self.current_token[1]
+            self.next_token()
+            return ('BINOP', op, left, right)
+        return left
+    
+    def expect(self, token_type):
+        if self.current_token and self.current_token[0] == token_type:
+            self.next_token()
+        else:
+            raise SyntaxError(f"Esperado {token_type}, encontrado {self.current_token}")
