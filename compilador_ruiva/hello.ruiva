@@ -1,9 +1,13 @@
 Open the door and have fun
-    Anteriormente nessa porra (X < 10)  
-        DISK DUNNY(X);
-        A Katia já foi uma grande mulher (X == 5)
-            EU TENHO MAIS O QUE FAZER;  
-        uuuuh
-        X = X + 1;
+
+Alex X = 0;
+Anteriormente nessa porra (X < 10)
+    DISK DUNNY(X);
+    A Katia já foi uma grande mulher (X == 5)
+        EU TENHO MAIS O QUE FAZER;
     uuuuh
+    X = X + 1;
+uuuuh
+
+DISK DUNNY("Terminou!");
 uuuuh
