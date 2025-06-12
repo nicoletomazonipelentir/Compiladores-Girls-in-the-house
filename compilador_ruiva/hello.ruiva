@@ -1,11 +1,9 @@
 Open the door and have fun
-    Todd X = 0; 
-    OLHA SO AQUI Todd?("%d", &X);
-    A Katia já foi uma grande mulher (X > 2)
-        DISK DUNNY("Hello, Mutante");
-    Caralhetee (X < 2)
-        DISK DUNNY("Mutante");
-    Ja fui uma grande mulher
-        DISK DUNNY("Hello");
+
+    Duny FR = 'a';  
+    DISK DUNNY("Hello World ");
+    Alex moças=0;
+    KENDRA FOXTI (moças = 0; moças < 5; moças++)
+        DISK DUNNY(moças);
     uuuuh
 uuuuh

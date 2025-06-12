@@ -18,6 +18,38 @@ class TiaRuivaCompiler:
         self.global_vars = {}
         self.context_stack = [{'vars': {}, 'functions': {}}]
         self.output = []
+        
+    def compile_and_run(self, code):
+        self.lines = [line.strip() for line in code.split('\n') if line.strip() and not line.strip().startswith('//')]
+        self.current_line = 0  # Adiciona um contador de linha atual
+
+        if not self.lines:
+            raise RuntimeError("Código vazio")
+
+        # Verificar abertura e fechamento
+        if self.lines[0] != 'Open the door and have fun':
+            raise RuntimeError("O código deve começar com 'Open the door and have fun'")
+        if self.lines[-1] != 'uuuuh':
+            raise RuntimeError("O código deve terminar com 'uuuuh'")
+
+        # Remover a primeira e última linhas
+        self.lines = self.lines[1:-1]
+
+        i = 0
+        while i < len(self.lines):
+            line = self.lines[i]
+            try:
+                if line.startswith('KENDRA FOXTI'):
+                    i = self.process_for_loop(self.lines, i)
+                elif line.startswith('Anteriormente nessa porra'):
+                    i = self.process_while(self.lines, i)
+                elif line.startswith('A Katia já foi uma grande mulher'):
+                    i = self.process_conditional_structure(self.lines, i)
+                else:
+                    self.execute_line(line)
+                    i += 1
+            except Exception as e:
+                raise RuntimeError(f"Erro na linha {i+2}: {line}\n{str(e)}")
     
     def reset(self):
         self.variables = {}
@@ -67,14 +99,13 @@ class TiaRuivaCompiler:
                 raise RuntimeError(f"Erro na linha {i+2}: {line}\n{str(e)}")
 
     def get_block(self, lines, start_idx):
+        #"""Captura um bloco de código até encontrar 'uuuuh'"""
         block = []
         i = start_idx
-        while i < len(lines):
-            if lines[i].strip() == 'uuuuh':
-                return block, i
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
             block.append(lines[i])
             i += 1
-        raise RuntimeError("Bloco não terminado com 'uuuuh'")
+        return block, i
     
     
     def execute_block(self, lines):
@@ -149,8 +180,9 @@ class TiaRuivaCompiler:
             
         # 4. Condicionais
         elif line.startswith('A Katia já foi uma grande mulher'):
-            self.process_conditional([line], 0)
-            return
+            remaining_lines = self._get_remaining_lines()
+            return self.process_conditional_structure([line] + remaining_lines, 0)
+           # return
         elif line.startswith('Caralhetee'):
             return
         elif line.startswith('Ja fui uma grande mulher'):
@@ -234,48 +266,31 @@ class TiaRuivaCompiler:
             # Executa inicialização
             self.execute_line(init)
             
-            # Se a variável da condição não existe, inicialize com zero
-            var_cond = condition.split()[0]
-            if var_cond not in self.variables:
-                self.variables[var_cond] = 0
-            
+            # Pega o bloco do for
             block, end_idx = self.get_block(lines, start_idx + 1)
             
             while True:
-                # Avalia a condição
+                # Verifica condição
                 if not self.evaluate_expression(condition):
                     break
                 
-                # Executa o bloco do loop
+                # Executa o bloco
                 self.execute_block(block)
                 
-                # Executa o incremento
-                inc_line = increment.strip()
-                if inc_line.endswith('++'):
-                    var = inc_line[:-2]
-                    self.variables[var] += 1
-                elif inc_line.endswith('--'):
-                    var = inc_line[:-2]
-                    self.variables[var] -= 1
-                else:
-                    self.execute_line(inc_line)
-            
-            while self.evaluate_expression(condition):
-                for inner_line in block:
-                    self.flow_control = None
-                    self.execute_line(inner_line)
+                # Executa incremento
+                self.execute_line(increment)
+                
+                # Verifica se foi interrompido por break
+                if hasattr(self, 'flow_control') and self.flow_control == 'break':
+                    delattr(self, 'flow_control')
+                    break
                     
-                    if self.flow_control == 'break':
-                        return end_idx + 1
-                    elif self.flow_control == 'continue':
-                        break
-                
-                if self.flow_control != 'continue':
-                    self.execute_line(increment)
-                
-                self.flow_control = None
+                # Reseta continue se existir
+                if hasattr(self, 'flow_control') and self.flow_control == 'continue':
+                    delattr(self, 'flow_control')
             
-            return end_idx + 1
+            return end_idx + 1  # Retorna a linha após o 'uuuuh'
+        
         except Exception as e:
             raise RuntimeError(f"Erro no for loop: {str(e)}")
 
@@ -362,30 +377,68 @@ class TiaRuivaCompiler:
             condition = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
             if self.evaluate_expression(condition):
                 executed = True
-                i = self._execute_conditional_block(lines, i+1)
+                i = self._execute_block(lines, i+1)
             else:
-                i = self._skip_conditional_block(lines, i+1)
-
-        # Processa ELSE IF (Caralhetee)
+                i = self._skip_block(lines, i+1)
+        
+        # Processa ELIF (Caralhetee)
         while i < len(lines) and lines[i].startswith('Caralhetee'):
             if not executed:
                 condition = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
                 if self.evaluate_expression(condition):
                     executed = True
+                    i = self._execute_block(lines, i+1)
+                else:
+                    i = self._skip_block(lines, i+1)
+            else:
+                i = self._skip_block(lines, i+1)
+        
+        # Processa ELSE (Ja fui uma grande mulher)
+        if i < len(lines) and lines[i].startswith('Ja fui uma grande mulher'):
+            if not executed:
+                i = self._execute_block(lines, i+1)
+        
+        return i + 1 if i < len(lines) and lines[i].strip() == 'uuuuh' else i
+
+    def process_conditional_blocks(self, lines, start_idx):
+        i = start_idx
+        executed = False
+        
+        # Padrões regex para cada tipo de condição
+        if_pattern = re.compile(r'A Katia já foi uma grande mulher\s*\((.*)\)')
+        elif_pattern = re.compile(r'Caralhetee\s*\((.*)\)')
+        else_pattern = re.compile(r'Ja fui uma grande mulher')
+        
+        # Processa IF
+        if_match = if_pattern.match(lines[i])
+        if if_match:
+            condition = if_match.group(1)
+            if self.evaluate_expression(condition):
+                executed = True
+                i = self._execute_conditional_block(lines, i+1)
+            else:
+                i = self._skip_to_next_conditional(lines, i+1)
+        
+        # Processa ELIF (pode ter vários)
+        while i < len(lines) and elif_pattern.match(lines[i]):
+            if not executed:
+                elif_match = elif_pattern.match(lines[i])
+                condition = elif_match.group(1)
+                if self.evaluate_expression(condition):
+                    executed = True
                     i = self._execute_conditional_block(lines, i+1)
                 else:
-                    i = self._skip_conditional_block(lines, i+1)
+                    i = self._skip_to_next_conditional(lines, i+1)
             else:
-                i = self._skip_conditional_block(lines, i+1)
-
-        # Processa ELSE (Ja fui uma grande mulher)
-        if i < len(lines) and lines[i].startswith('Ja fui uma grande mulher') and not executed:
+                i = self._skip_to_next_conditional(lines, i+1)
+        
+        # Processa ELSE
+        if i < len(lines) and else_pattern.match(lines[i]) and not executed:
             i = self._execute_conditional_block(lines, i+1)
-
+        
         return i
 
     def _execute_block(self, lines, start_idx):
-        #"""Executa linhas até encontrar 'uuuuh'"""
         i = start_idx
         while i < len(lines) and lines[i].strip() != 'uuuuh':
             self.execute_line(lines[i])
@@ -393,24 +446,84 @@ class TiaRuivaCompiler:
         return i
 
     def _skip_block(self, lines, start_idx):
-       # """Pula linhas até encontrar 'uuuuh'"""
         i = start_idx
         while i < len(lines) and lines[i].strip() != 'uuuuh':
             i += 1
         return i
+    
+    def process_conditional_structure(self, lines, start_idx):
+        i = start_idx
+        executed = False
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # IF
+            if line.startswith('A Katia já foi uma grande mulher'):
+                condition = line[line.find('(')+1:line.rfind(')')].strip()
+                if not executed and self.evaluate_expression(condition):
+                    executed = True
+                    i = self._execute_conditional_block(lines, i + 1)
+                else:
+                    i = self._skip_to_next_branch(lines, i + 1)
+
+            # ELIF
+            elif line.startswith('Caralhetee'):
+                condition = line[line.find('(')+1:line.rfind(')')].strip()
+                if not executed and self.evaluate_expression(condition):
+                    executed = True
+                    i = self._execute_conditional_block(lines, i + 1)
+                else:
+                    i = self._skip_to_next_branch(lines, i + 1)
+
+            # ELSE
+            elif line.startswith('Ja fui uma grande mulher'):
+                if not executed:
+                    executed = True
+                    i = self._execute_conditional_block(lines, i + 1)
+                else:
+                    i = self._skip_entire_conditional_structure(lines, i + 1)
+
+            # Fim da estrutura
+            elif line == 'uuuuh':
+                return i + 1
+
+            # Linha normal (dentro de um bloco)
+            else:
+                i += 1
+
+        return i
+
+    def _get_remaining_lines(self):
+        if hasattr(self, 'lines') and hasattr(self, 'current_line'):
+            return self.lines[self.current_line + 1:]
+        return []
 
     def _execute_conditional_block(self, lines, start_idx):
+        #"""Executa todas as linhas até encontrar 'uuuuh'"""
         i = start_idx
-        while i < len(lines) and not lines[i].strip() == 'uuuuh':
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
             self.execute_line(lines[i])
             i += 1
-        return i + 1  # Pula o 'uuuuh'
+        return i
 
-    def _skip_conditional_block(self, lines, start_idx):
+    def _skip_to_next_branch(self, lines, start_idx):
+        #"""Pula linhas até encontrar próximo branch (elif/else) ou 'uuuuh'"""
         i = start_idx
-        while i < len(lines) and not lines[i].strip() == 'uuuuh':
+        while i < len(lines) and not (
+            lines[i].startswith('Caralhetee') or 
+            lines[i].startswith('Ja fui uma grande mulher') or
+            lines[i].strip() == 'uuuuh'
+        ):
             i += 1
-        return i + 1  # Pula o 'uuuuh'
+        return i
+
+    def _skip_entire_conditional_structure(self, lines, start_idx):
+        """Pula toda a estrutura condicional restante"""
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            i += 1
+        return i
 
     def process_block(self, lines, start_idx):
         i = start_idx
@@ -642,15 +755,27 @@ class TiaRuivaCompiler:
         for nome, valor in self.current_context()['vars'].items():
             print(f"{nome} = {valor} (tipo: {type(valor).__name__})")
 
+def run(self, filename):
+    with open(filename, 'r', encoding='utf-8') as f:
+        self.lines = [line.strip('\n') for line in f.readlines()]
+    
+    i = 0
+    while i < len(self.lines):
+        line = self.lines[i].strip()
+        # processa a linha
+        i += 1
+
+
 def run_ruiva_file(filename):
     with open(filename, 'r', encoding='utf-8') as f:
         code = f.read()
-    
+
     compiler = TiaRuivaCompiler()
     try:
         compiler.compile_and_run(code)
     except Exception as e:
         print(f"Erro durante a execução: {str(e)}")
+
 
 if __name__ == "__main__":
     import sys
