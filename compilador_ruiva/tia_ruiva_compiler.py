@@ -115,7 +115,7 @@ class TiaRuivaCompiler:
             return
         
         # Ignora linhas de fechamento de bloco
-        if line == 'uuuuh':
+        if not line or line == 'uuuuh':
             return
 
         # Trata incrementos/decrementos pós-fixados
@@ -348,57 +348,75 @@ class TiaRuivaCompiler:
 
         return i
 
-    def process_conditional(self, lines, i):
-        condition_line = lines[i]
-
-        if "A Katia já foi uma grande mulher" in condition_line:
-            condition = condition_line.split("(", 1)[1].rstrip(")")
+    def get_remaining_lines(self):
+        #"""Retorna as linhas restantes do bloco atual"""
+        # Implemente conforme sua estrutura de código
+        return self.lines[self.current_line_index+1:]
+        
+    def process_conditional(self, lines, start_idx):
+        i = start_idx
+        executed = False
+        
+        # Processa IF
+        if i < len(lines) and lines[i].startswith('A Katia já foi uma grande mulher'):
+            condition = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
             if self.evaluate_expression(condition):
-                i += 1
-                while i < len(lines) and not lines[i].startswith("Mas dizem que ela mudou") and not lines[i].startswith("Mentira dela"):
-                    self.execute_line(lines[i])
-                    i += 1
-                while i < len(lines) and (lines[i].startswith("Mas dizem que ela mudou") or lines[i].startswith("Mentira dela")):
-                    i += 1
-                return i
+                executed = True
+                i = self._execute_conditional_block(lines, i+1)
             else:
-                i += 1
-                while i < len(lines) and not lines[i].startswith("Mas dizem que ela mudou") and not lines[i].startswith("Mentira dela"):
-                    i += 1
+                i = self._skip_conditional_block(lines, i+1)
 
-                if i < len(lines) and lines[i].startswith("Mas dizem que ela mudou"):
-                    condition = lines[i].split("(", 1)[1].rstrip(")")
-                    if self.evaluate_expression(condition):
-                        i += 1
-                        while i < len(lines) and not lines[i].startswith("Mentira dela"):
-                            self.execute_line(lines[i])
-                            i += 1
-                        return i
-                    else:
-                        while i < len(lines) and not lines[i].startswith("Mentira dela"):
-                            i += 1
+        # Processa ELSE IF (Caralhetee)
+        while i < len(lines) and lines[i].startswith('Caralhetee'):
+            if not executed:
+                condition = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
+                if self.evaluate_expression(condition):
+                    executed = True
+                    i = self._execute_conditional_block(lines, i+1)
+                else:
+                    i = self._skip_conditional_block(lines, i+1)
+            else:
+                i = self._skip_conditional_block(lines, i+1)
 
-                if i < len(lines) and lines[i].startswith("Mentira dela"):
-                    i += 1
-                    while i < len(lines) and not lines[i].startswith("A Katia já foi uma grande mulher"):
-                        self.execute_line(lines[i])
-                        i += 1
+        # Processa ELSE (Ja fui uma grande mulher)
+        if i < len(lines) and lines[i].startswith('Ja fui uma grande mulher') and not executed:
+            i = self._execute_conditional_block(lines, i+1)
 
         return i
 
-    def skip_to_next_conditional(self, lines, start_idx):
+    def _execute_block(self, lines, start_idx):
+        #"""Executa linhas até encontrar 'uuuuh'"""
         i = start_idx
-        while i < len(lines):
-            if lines[i].strip() in ('uuuuh', 'Caralhetee', 'Ja fui uma grande mulher'):
-                return i
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            self.execute_line(lines[i])
             i += 1
         return i
-    
+
+    def _skip_block(self, lines, start_idx):
+       # """Pula linhas até encontrar 'uuuuh'"""
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            i += 1
+        return i
+
+    def _execute_conditional_block(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines) and not lines[i].strip() == 'uuuuh':
+            self.execute_line(lines[i])
+            i += 1
+        return i + 1  # Pula o 'uuuuh'
+
+    def _skip_conditional_block(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines) and not lines[i].strip() == 'uuuuh':
+            i += 1
+        return i + 1  # Pula o 'uuuuh'
+
     def process_block(self, lines, start_idx):
         i = start_idx
         while i < len(lines):
             line = lines[i].strip()
-            if line in ('uuuuh', 'Caralhetee', 'Ja fui uma grande mulher'):
+            if line in ('Caralhetee', 'Ja fui uma grande mulher', 'uuuuh'):
                 return i
             self.execute_line(line)
             i += 1
