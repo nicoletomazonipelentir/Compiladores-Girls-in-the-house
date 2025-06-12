@@ -2,6 +2,8 @@ import re
 
 class TiaRuivaCompiler:
     def __init__(self):
+        FLOW_CONTINUE = 'DOMENICA;'
+        FLOW_BREAK = 'EU TENHO MAIS O QUE FAZER;'
         self.variables = {}
         self.reset()
         
@@ -78,8 +80,9 @@ class TiaRuivaCompiler:
             line = lines[i].strip()
 
             # Detecta if
-            if line.startswith("A Katia já foi uma grande mulher"):
-                i = self.process_if_else(lines, i)
+            if line.startswith('A Katia já foi uma grande mulher'):
+                print(f"Executando estrutura condicional a partir da linha {i}")
+                i = self.process_if_else(lines, i)  # isso pula todo o bloco
                 continue  # já atualizou i, continuar do próximo
             # Detecta prints
             elif line.startswith("DISK DUNNY"):
@@ -100,6 +103,14 @@ class TiaRuivaCompiler:
 
     def execute_line(self, line):
         line = line.strip()
+        
+        # Verifica break/continue (deve vir primeiro!)
+        if line == self.FLOW_CONTINUE:
+            self.flow_control = 'continue'
+            return
+        elif line == self.FLOW_BREAK:
+            self.flow_control = 'break'
+            return
         
         # Ignora linhas de fechamento de bloco
         if line == 'uuuuh':
@@ -226,85 +237,100 @@ class TiaRuivaCompiler:
                 else:
                     self.execute_line(inc_line)
             
-            return end_idx + 1  # Retorna a linha após o 'uuuuh'
+            while self.evaluate_expression(condition):
+                for inner_line in block:
+                    self.flow_control = None
+                    self.execute_line(inner_line)
+                    
+                    if self.flow_control == 'break':
+                        return end_idx + 1
+                    elif self.flow_control == 'continue':
+                        break
+                
+                # Executa incremento (a menos que seja continue)
+                if self.flow_control != 'continue':
+                    self.execute_line(increment)
+                
+                self.flow_control = None
+            
+            return end_idx + 1 # Retorna a linha após o 'uuuuh'
         except Exception as e:
             raise RuntimeError(f"Erro no for loop: {str(e)}")
 
     def process_if_else(self, lines, start_idx):
         i = start_idx
-        executou_bloco = False
+        blocks = []  # vai guardar tuplas (tipo, condição, corpo)
+        # Primeiro if
+        line = lines[i].strip()
+        match_if = re.match(r'A Katia já foi uma grande mulher\s*\((.*)\)', line)
+        if not match_if:
+            raise SyntaxError(f"Condicional if inválida: {line}")
+        cond = match_if.group(1)
+        i += 1
 
+        body = []
         while i < len(lines):
-            line = lines[i].strip()
+            l = lines[i].strip()
+            if l in ('uuuuh', 'uuuuh;'):
+                break
+            # Para cada linha, adicionar no corpo até encontrar próximo bloco ou fim
+            # Mas como pode ter elif e else, a gente deve checar isso
+            # Se encontrar elif ou else, para o corpo do if
+            if l.startswith('Caralhetee') or l.startswith('Ja fui uma grande mulher'):
+                break
+            body.append(lines[i])
+            i += 1
 
-            # IF
-            if line.startswith('A Katia já foi uma grande mulher'):
-                match = re.match(r'^A Katia já foi uma grande mulher\s*\((.*)\)', line)
-                if not match:
-                    raise SyntaxError(f"Condicional if inválida: {line}")
-                condition = match.group(1)
-                cond_value = self.evaluate_expression(condition)
-                print(f"IF: '{condition}' => {cond_value}")
+        blocks.append(('if', cond, body))
+
+        # Agora trata elifs e else
+        while i < len(lines):
+            l = lines[i].strip()
+            if l in ('uuuuh', 'uuuuh;'):
+                break
+            elif l.startswith('Caralhetee'):
+                # elif
+                match_elif = re.match(r'Caralhetee\s*\((.*)\)', l)
+                if not match_elif:
+                    raise SyntaxError(f"Condicional elif inválida: {l}")
+                cond_elif = match_elif.group(1)
                 i += 1
-
                 body = []
-                while i < len(lines) and lines[i].strip() not in ('uuuuh', 'uuuuh;'):
+                while i < len(lines):
+                    l2 = lines[i].strip()
+                    if l2 in ('uuuuh', 'uuuuh;') or l2.startswith('Caralhetee') or l2.startswith('Ja fui uma grande mulher'):
+                        break
                     body.append(lines[i])
                     i += 1
-
-                if cond_value:
-                    self.execute_block(body)
-                    executou_bloco = True
-
-                i += 1  # pula 'uuuuh'
-
-            # ELIF
-            elif line.startswith('Caralhetee'):
-                if executou_bloco:
-                    # pula bloco
-                    i += 1
-                    while i < len(lines) and lines[i].strip() not in ('uuuuh', 'uuuuh;'):
-                        i += 1
-                    i += 1
-                    continue
-
-                match = re.match(r'^Caralhetee\s*\((.*)\)', line)
-                if not match:
-                    raise SyntaxError(f"Condicional elif inválida: {line}")
-                condition = match.group(1)
-                cond_value = self.evaluate_expression(condition)
-                print(f"ELIF: '{condition}' => {cond_value}")
+                blocks.append(('elif', cond_elif, body))
+            elif l.startswith('Ja fui uma grande mulher'):
+                # else
                 i += 1
-
                 body = []
-                while i < len(lines) and lines[i].strip() not in ('uuuuh', 'uuuuh;'):
+                while i < len(lines):
+                    l2 = lines[i].strip()
+                    if l2 in ('uuuuh', 'uuuuh;'):
+                        break
                     body.append(lines[i])
                     i += 1
-
-                if cond_value:
-                    self.execute_block(body)
-                    executou_bloco = True
-
-                i += 1
-
-            # ELSE
-            elif line.startswith('Já fui uma grande mulher') or line.startswith('Ja fui uma grande mulher'):
-                print("ELSE encontrado")
-                i += 1
-
-                body = []
-                while i < len(lines) and lines[i].strip() not in ('uuuuh', 'uuuuh;'):
-                    body.append(lines[i])
-                    i += 1
-
-                if not executou_bloco:
-                    self.execute_block(body)
-                    executou_bloco = True
-
-                i += 1
-
+                blocks.append(('else', None, body))
             else:
-                # fim da estrutura if-elif-else
+                break
+
+        # pula a linha final do fim do bloco
+        while i < len(lines) and lines[i].strip() not in ('uuuuh', 'uuuuh;'):
+            i += 1
+        i += 1
+
+        # Agora executa primeiro bloco verdadeiro
+        for tipo, condicao, corpo in blocks:
+            if tipo in ('if', 'elif'):
+                val = self.evaluate_expression(condicao)
+                if val:
+                    self.execute_block(corpo)
+                    break
+            else:  # else
+                self.execute_block(corpo)
                 break
 
         return i
@@ -421,36 +447,39 @@ class TiaRuivaCompiler:
 
 
     
-    def process_while(self, lines, i):
-        line = lines[i]
-        condition_start = line.find('(') + 1
-        condition_end = line.rfind(')')
-        condition = line[condition_start:condition_end].strip()
-
+    def process_while(self, lines, start_idx):
+        line = lines[start_idx]
+        condition = line[line.find('(')+1:line.rfind(')')].strip()
+        
+        # Pega todo o bloco do while
         block_lines = []
-        i += 1
-
-        # Coletar o bloco do while
-        while i < len(lines) and lines[i] != 'uuuuh;':
+        i = start_idx + 1
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
             block_lines.append(lines[i])
             i += 1
-
-        # Ignorar o 'uuuuh;'
-        i += 1
-
-        # Executar enquanto a condição for verdadeira
+        
+        # Executa o loop
         while self.evaluate_expression(condition):
             for inner_line in block_lines:
-                # Permitir break e continue personalizados
-                self.flow_control = None
+                self.flow_control = None  # Reseta antes de cada comando
                 self.execute_line(inner_line)
-
+                
                 if self.flow_control == 'break':
-                    return i  # sai do while
+                    return i + 1  # Sai do while completamente
                 elif self.flow_control == 'continue':
-                    break  # volta para o while sem terminar o bloco
-
-        return i  # retorna a próxima linha após o bloco
+                    break  # Pula para próxima iteração
+            
+            # Se foi break, já saiu
+            if self.flow_control == 'break':
+                break
+                
+            # Atualiza a condição
+            if self.flow_control != 'continue':
+                pass  # Fluxo normal
+                
+            self.flow_control = None
+        
+        return i + 1  # Retorna a linha após o 'uuuuh'
 
 
     def process_variable_declaration(self, line):
