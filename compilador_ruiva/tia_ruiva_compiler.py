@@ -545,67 +545,128 @@ class TiaRuivaCompiler:
     def process_conditional_structure(self, lines, start_idx):
         i = start_idx
         executed = False
-
-        while i < len(lines):
-            line = lines[i].strip()
-
-            # IF
-            if line.startswith('A Katia já foi uma grande mulher'):
-                condition = line[line.find('(')+1:line.rfind(')')].strip()
-                if not executed and self.evaluate_expression(condition):
-                    executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_to_next_branch(lines, i + 1)
-
-            # ELIF
-            elif line.startswith('Caralhetee'):
-                condition = line[line.find('(')+1:line.rfind(')')].strip()
-                if not executed and self.evaluate_expression(condition):
-                    executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_to_next_branch(lines, i + 1)
-
-            # ELSE
-            elif line.startswith('Ja fui uma grande mulher'):
-                if not executed:
-                    executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_entire_conditional_structure(lines, i + 1)
-
-            # Fim da estrutura
-            elif line == 'uuuuh':
-                return i + 1
-
-            # Linha normal (dentro de um bloco)
-            else:
+        
+        # Extrai condição do IF
+        if_cond = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
+        
+        # Avalia IF
+        if self._eval_condition(if_cond):
+            executed = True
+            i += 1
+            # Executa bloco IF
+            while i < len(lines) and not self._is_conditional_end(lines[i]):
+                self.execute_line(lines[i])
                 i += 1
+        else:
+            i += 1
+            # Pula bloco IF
+            while i < len(lines) and not self._is_conditional_end(lines[i]):
+                i += 1
+        
+        # Processa ELIFs
+        while i < len(lines) and lines[i].strip().startswith('Caralhetee'):
+            if not executed:
+                elif_cond = lines[i][lines[i].find('(')+1:lines[i].rfind(')')].strip()
+                if self._eval_condition(elif_cond):
+                    executed = True
+                    i += 1
+                    # Executa bloco ELIF
+                    while i < len(lines) and not self._is_conditional_end(lines[i]):
+                        self.execute_line(lines[i])
+                        i += 1
+                    continue
+            i += 1
+            # Pula bloco ELIF
+            while i < len(lines) and not lines[i].strip().startswith(('Ja fui', 'uuuuh')):
+                i += 1
+        
+        # Processa ELSE
+        if not executed and i < len(lines) and lines[i].strip().startswith('Ja fui'):
+            i += 1
+            while i < len(lines) and lines[i].strip() != 'uuuuh':
+                self.execute_line(lines[i])
+                i += 1
+        
+        return i + 1 if i < len(lines) else i
 
-        return i
+    def _is_conditional_end(self, line):
+        return line.strip().startswith(('Caralhetee', 'Ja fui', 'uuuuh'))
 
-    def _get_remaining_lines(self):
-        if hasattr(self, 'lines') and hasattr(self, 'current_line'):
-            return self.lines[self.current_line + 1:]
-        return []
+    def _eval_condition(self, expr):
+        """Avalia condições booleanas de forma segura"""
+        expr = expr.strip(';').strip()
+        
+        # Tabela de operadores
+        ops = {
+            '>=': lambda x, y: x >= y,
+            '<=': lambda x, y: x <= y,
+            '==': lambda x, y: x == y,
+            '!=': lambda x, y: x != y,
+            '>':  lambda x, y: x > y,
+            '<':  lambda x, y: x < y
+        }
+        
+        # Verifica operadores
+        for op in ops:
+            if op in expr:
+                left, right = map(str.strip, expr.split(op, 1))
+                left_val = self._eval_simple_expr(left)
+                right_val = self._eval_simple_expr(right)
+                return ops[op](left_val, right_val)
+        
+        # Avaliação simples
+        return bool(self._eval_simple_expr(expr))
 
+    def _eval_simple_expr(self, expr):
+        """Avalia expressões simples (variáveis ou literais)"""
+        # Verifica variáveis nos escopos
+        for ctx in reversed(self.context_stack):
+            if expr in ctx.get('vars', {}):
+                return ctx['vars'][expr]
+        
+        # Tenta converter para número
+        try:
+            return int(expr)
+        except ValueError:
+            try:
+                return float(expr)
+            except ValueError:
+                raise ValueError(f"Expressão inválida: {expr}")
+    
     def _execute_conditional_block(self, lines, start_idx):
-        #"""Executa todas as linhas até encontrar 'uuuuh'"""
         i = start_idx
-        while i < len(lines) and lines[i].strip() != 'uuuuh':
+        while i < len(lines) and not lines[i].startswith(('Caralhetee', 'Ja fui uma grande mulher', 'uuuuh')):
             self.execute_line(lines[i])
             i += 1
         return i
 
     def _skip_to_next_branch(self, lines, start_idx):
-        #"""Pula linhas até encontrar próximo branch (elif/else) ou 'uuuuh'"""
         i = start_idx
-        while i < len(lines) and not (
-            lines[i].startswith('Caralhetee') or 
-            lines[i].startswith('Ja fui uma grande mulher') or
-            lines[i].strip() == 'uuuuh'
-        ):
+        while i < len(lines) and not lines[i].startswith(('Caralhetee', 'Ja fui uma grande mulher', 'uuuuh')):
+            i += 1
+        return i
+
+    def _skip_to_end_of_conditional(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            i += 1
+        return i
+      
+    def _get_remaining_lines(self):
+        if hasattr(self, 'lines') and hasattr(self, 'current_line'):
+            return self.lines[self.current_line + 1:]
+        return []
+
+
+    def _skip_to_next_branch(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines) and not lines[i].startswith(('Caralhetee', 'Ja fui uma grande mulher', 'uuuuh')):
+            i += 1
+        return i
+
+    def _skip_to_end_of_conditional(self, lines, start_idx):
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
             i += 1
         return i
 
@@ -849,38 +910,41 @@ class TiaRuivaCompiler:
     def evaluate_expression(self, expr):
         expr = expr.strip().rstrip(';')
         
-        # Verifica string literal
-        if expr.startswith('"') and expr.endswith('"'):
-            return expr[1:-1]
+        # Limpeza da expressão
+        expr = expr.replace('(', '').replace(')', '').strip()
         
-        # Busca variável nos escopos
+        # Operadores de comparação
+        ops = {'>=': lambda x, y: x >= y,
+            '<=': lambda x, y: x <= y,
+            '==': lambda x, y: x == y,
+            '!=': lambda x, y: x != y,
+            '>': lambda x, y: x > y,
+            '<': lambda x, y: x < y}
+        
+        for op, func in ops.items():
+            if op in expr:
+                left, right = expr.split(op, 1)
+                left_val = self._eval_simple_expression(left.strip())
+                right_val = self._eval_simple_expression(right.strip())
+                return func(left_val, right_val)
+        
+        return self._eval_simple_expression(expr)
+
+    def _eval_simple_expression(self, expr):
+        # Verifica variáveis
         for context in reversed(self.context_stack):
             if expr in context.get('vars', {}):
                 return context['vars'][expr]
         
-        # Tenta avaliar como expressão matemática
-        if any(op in expr for op in '+-*/%'):
-            try:
-                # Substitui variáveis por valores
-                local_vars = {}
-                for context in self.context_stack:
-                    local_vars.update(context.get('vars', {}))
-                
-                # Cria ambiente seguro para eval
-                safe_dict = {k: v for k, v in local_vars.items() if isinstance(v, (int, float))}
-                return eval(expr, {'__builtins__': None}, safe_dict)
-            except:
-                pass
-        
-        # Tenta como número literal
+        # Tenta como número
         try:
             return int(expr)
         except ValueError:
             try:
                 return float(expr)
             except ValueError:
-                raise NameError(f"Variável ou valor inválido: {expr}")
-
+                raise ValueError(f"Expressão inválida: {expr}")
+            
     def get_output(self):
         return '\n'.join(self.output)
     

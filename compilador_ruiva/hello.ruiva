@@ -1,13 +1,11 @@
 Open the door and have fun
-// Declaração correta com tipos nos parâmetros
-PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
-    // Uso correto - apenas nomes das variáveis
-    RETORNA ESSA MERDA A+B;
-uuuuh
+Alex X = 3;
 
-// Programa principal
-Alex X = 5;
-Alex Y = 3;
-Alex Z = PENSÃO DA TIA RUIVA ENTREGA SOMAR(X, Y);
-DISK DUNNY(Z);
+A Katia já foi uma grande mulher (X > 2)
+    DISK DUNNY("Condição 1: X > 2");
+Caralhetee (X < 2)
+    DISK DUNNY("Condição 2: X < 2");
+Ja fui uma grande mulher
+    DISK DUNNY("Condição else");
+uuuuh
 uuuuh
