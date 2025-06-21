@@ -110,6 +110,87 @@ class TiaRuivaCompiler:
             i += 1
         return block, i
     
+    def process_function_declaration(self, line):
+        try:
+            # Padrão mais robusto para capturar declaração
+            match = re.match(
+                r'PENSÃO DA TIA RUIVA RECEBE\s*\(([^)]+)\)', 
+                line.strip()
+            )
+            if not match:
+                raise SyntaxError("Sintaxe inválida na declaração de função")
+            
+            # Extrai tipo_retorno, nome_função e parâmetros
+            parts = match.group(1).split(None, 2)
+            if len(parts) < 2:
+                raise SyntaxError("Declaração de função incompleta")
+            
+            return_type = parts[0]
+            func_name = parts[1]
+            params_str = parts[2] if len(parts) > 2 else ""
+            
+            # Processa parâmetros (formato: "Tipo1 nome1, Tipo2 nome2")
+            params = []
+            for param in params_str.strip('()').split(','):
+                param = param.strip()
+                if param:
+                    type_and_name = param.split()
+                    if len(type_and_name) != 2:
+                        raise SyntaxError(f"Formato de parâmetro inválido: {param}")
+                    params.append({
+                        'type': type_and_name[0],
+                        'name': type_and_name[1]  # Armazena apenas o nome (sem tipo)
+                    })
+            
+            # Registra a função
+            self.global_functions[func_name] = {
+                'return_type': return_type,
+                'params': params,
+                'body': []
+            }
+            
+        except Exception as e:
+            raise RuntimeError(f"Erro na declaração de função: {str(e)}")
+
+    def process_function_call(self, line):
+        try:
+            # Extrai nome da função e argumentos
+            func_part = line.split('PENSÃO DA TIA RUIVA ENTREGA')[1].strip()
+            func_name = func_part.split('(')[0].strip()
+            args_str = func_part.split('(')[1].split(')')[0]
+            args = [arg.strip() for arg in args_str.split(',') if arg.strip()]
+            
+            if func_name not in self.global_functions:
+                raise NameError(f"Função '{func_name}' não definida")
+            
+            func_def = self.global_functions[func_name]
+            
+            if len(args) != len(func_def['params']):
+                raise TypeError(f"Número incorreto de argumentos para {func_name}")
+
+            # Cria novo escopo
+            new_scope = {'vars': {}}
+            
+            # Mapeia argumentos para parâmetros (usando apenas o nome)
+            for param, arg in zip(func_def['params'], args):
+                arg_value = self.evaluate_expression(arg)
+                new_scope['vars'][param['name']] = arg_value
+            
+            # Executa no novo escopo
+            self.context_stack.append(new_scope)
+            result = None
+            
+            for body_line in func_def['body']:
+                if body_line.strip().startswith('RETORNA ESSA MERDA'):
+                    return_expr = body_line[18:].split(';')[0].strip()
+                    result = self.evaluate_expression(return_expr)
+                    break
+            
+            self.context_stack.pop()
+            return result
+            
+        except Exception as e:
+            raise RuntimeError(f"Erro na chamada de função: {str(e)}")
     
     def execute_block(self, lines):
         i = 0
@@ -659,9 +740,9 @@ class TiaRuivaCompiler:
 
     def process_function_declaration(self, line):
         try:
-            # Padrão: PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
+            # Padrão ajustado para capturar melhor a declaração
             match = re.match(
-                r'PENSÃO DA TIA RUIVA RECEBE\s*\((\w+)\s+(\w+)\(((?:\w+\s+\w+,?\s*)*)\)\)', 
+                r'PENSÃO DA TIA RUIVA RECEBE\s*\((\w+)\s+(\w+)\(([^)]*)\)\)',
                 line
             )
             if not match:
@@ -669,9 +750,20 @@ class TiaRuivaCompiler:
             
             return_type = match.group(1)
             func_name = match.group(2)
-            params = [p.strip() for p in match.group(3).split(',') if p.strip()]
+            params_str = match.group(3)
             
-            # Armazena a função no contexto global
+            # Processa cada parâmetro
+            params = []
+            for param in params_str.split(','):
+                param = param.strip()
+                if param:
+                    # Divide tipo e nome (ex: "Alex A" → ["Alex", "A"])
+                    parts = param.split()
+                    if len(parts) != 2:
+                        raise SyntaxError(f"Formato inválido para parâmetro: {param}")
+                    params.append((parts[0], parts[1]))  # (tipo, nome)
+            
+            # Armazena a definição da função
             self.global_functions[func_name] = {
                 'return_type': return_type,
                 'params': params,
@@ -697,7 +789,7 @@ class TiaRuivaCompiler:
         
     def process_function_call(self, line):
         try:
-            # Padrão: PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B)
+            # Padrão para capturar chamada de função
             match = re.match(r'PENSÃO DA TIA RUIVA ENTREGA\s+(\w+)\(([^)]*)\)', line)
             if not match:
                 raise SyntaxError("Sintaxe inválida para chamada de função")
@@ -711,31 +803,37 @@ class TiaRuivaCompiler:
             
             func_def = self.global_functions[func_name]
             
-            # Verifica número de parâmetros
+            # Verifica número de argumentos
             if len(args) != len(func_def['params']):
                 raise TypeError(f"Número incorreto de argumentos para {func_name}")
             
-            # Cria novo contexto com parâmetros
-            new_scope = {'vars': {}, 'functions': {}}
+            # Cria novo escopo para a função
+            new_scope = {'vars': {}}
             
-            # Mapeia parâmetros (Alex A → A)
-            for param_decl, arg in zip(func_def['params'], args):
-                param_parts = param_decl.split()
-                param_name = param_parts[-1]  # Pega só o nome
-                new_scope['vars'][param_name] = self.evaluate_expression(arg)
+            # Atribui valores aos parâmetros
+            for (param_type, param_name), arg in zip(func_def['params'], args):
+                # Avalia o argumento no escopo atual
+                arg_value = self.evaluate_expression(arg)
+                # Armazena no escopo da função
+                new_scope['vars'][param_name] = arg_value
             
+            # Empilha o novo escopo
             self.context_stack.append(new_scope)
             
-            # Executa o corpo
+            # Executa o corpo da função
             result = None
-            for line in func_def['body']:
-                if line.startswith('RETORNA ESSA MERDA'):
-                    return_expr = line[18:].strip(' ;')
+            for body_line in func_def['body']:
+                # Verifica se é um return
+                if body_line.startswith('RETORNA ESSA MERDA'):
+                    return_expr = body_line[18:].strip(' ;')
                     result = self.evaluate_expression(return_expr)
                     break
-                self.execute_line(line)
+                # Executa outras linhas
+                self.execute_line(body_line)
             
+            # Desempilha o escopo
             self.context_stack.pop()
+            
             return result
             
         except Exception as e:
@@ -749,20 +847,39 @@ class TiaRuivaCompiler:
         return result
 
     def evaluate_expression(self, expr):
+        expr = expr.strip().rstrip(';')
+        
+        # Verifica string literal
+        if expr.startswith('"') and expr.endswith('"'):
+            return expr[1:-1]
+        
+        # Busca variável nos escopos
+        for context in reversed(self.context_stack):
+            if expr in context.get('vars', {}):
+                return context['vars'][expr]
+        
+        # Tenta avaliar como expressão matemática
+        if any(op in expr for op in '+-*/%'):
+            try:
+                # Substitui variáveis por valores
+                local_vars = {}
+                for context in self.context_stack:
+                    local_vars.update(context.get('vars', {}))
+                
+                # Cria ambiente seguro para eval
+                safe_dict = {k: v for k, v in local_vars.items() if isinstance(v, (int, float))}
+                return eval(expr, {'__builtins__': None}, safe_dict)
+            except:
+                pass
+        
+        # Tenta como número literal
         try:
-            expr = expr.strip().rstrip(';')
-            
-            if expr.startswith('"') and expr.endswith('"'):
-                return expr[1:-1]
-                
-            if expr in self.current_context()['vars']:
-                return self.current_context()['vars'][expr]
-                
-            local_vars = self.current_context()['vars'].copy()
-            return eval(expr, {}, local_vars)
-            
-        except Exception as e:
-            raise RuntimeError(f"Erro ao avaliar expressão '{expr}': {str(e)}")
+            return int(expr)
+        except ValueError:
+            try:
+                return float(expr)
+            except ValueError:
+                raise NameError(f"Variável ou valor inválido: {expr}")
 
     def get_output(self):
         return '\n'.join(self.output)

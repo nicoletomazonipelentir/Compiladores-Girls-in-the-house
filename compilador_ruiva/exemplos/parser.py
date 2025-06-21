@@ -17,6 +17,8 @@ class Parser:
         while self.current_token:
             if self.current_token[0] in ['INT', 'CHAR', 'LONG', 'SHORT']:
                 statements.append(self.parse_declaration())
+            elif self.current_token[0] == 'FUNCTION_DECL':
+                statements.append(self.parse_function())
             elif self.current_token[0] == 'FOR':
                 statements.append(self.parse_for())
             elif self.current_token[0] == 'WHILE':
@@ -28,6 +30,30 @@ class Parser:
             else:
                 self.next_token()
         return statements
+   
+   
+    def parse_function(self):
+        self.next_token()  # Pula 'PENSAO DA TIA RUIVA RECEBE'
+        self.expect('OPEN_PAREN')
+        
+        # Parse dos parâmetros
+        params = []
+        while self.current_token and self.current_token[0] != 'CLOSE_PAREN':
+            param_type = self.current_token[1]
+            self.next_token()
+            param_name = self.current_token[1]
+            self.next_token()
+            params.append((param_type, param_name))
+            if self.current_token and self.current_token[0] == 'COMMA':
+                self.next_token()
+        
+        self.expect('CLOSE_PAREN')
+        func_name = self.current_token[1]
+        self.next_token()
+        
+        # Parse do corpo da função
+        body = self.parse_block()
+        return ('FUNCTION', func_name, params, body)
     
     def parse_declaration(self):
         var_type = self.current_token[1]

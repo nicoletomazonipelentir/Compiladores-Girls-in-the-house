@@ -1,11 +1,13 @@
 Open the door and have fun
-    // Declaração de função
-    PENSAO DA TIA RUIVA RECEBE (Alex NOMEFUNC(Alex A, Alex B))
-    // código da função
-        RETORNA ESSA MERDA A+B;
-    uuuuh
-    // Chamada de função
-    Alex A = 5;
-    Alex B = 8;
-    Alex C = PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B);
+// Declaração correta com tipos nos parâmetros
+PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
+    // Uso correto - apenas nomes das variáveis
+    RETORNA ESSA MERDA A+B;
+uuuuh
+
+// Programa principal
+Alex X = 5;
+Alex Y = 3;
+Alex Z = PENSÃO DA TIA RUIVA ENTREGA SOMAR(X, Y);
+DISK DUNNY(Z);
 uuuuh
