@@ -348,6 +348,7 @@ class TiaRuivaCompiler:
     def process_for_loop(self, lines, start_idx):
         try:
             line = lines[start_idx]
+            # Padroniza a extração dos componentes do for
             match = re.match(r'KENDRA FOXTI\s*\((.*?)\s*;\s*(.*?)\s*;\s*(.*?)\)', line)
             if not match:
                 raise SyntaxError("Sintaxe inválida do for loop")
@@ -357,34 +358,42 @@ class TiaRuivaCompiler:
             # Executa inicialização
             self.execute_line(init)
             
-            # Pega o bloco do for
-            block, end_idx = self.get_block(lines, start_idx + 1)
+            # Pega o bloco do for (até encontrar 'uuuuh')
+            block_lines = []
+            i = start_idx + 1
+            while i < len(lines) and lines[i].strip() != 'uuuuh':
+                block_lines.append(lines[i])
+                i += 1
             
+            # Executa o loop
             while True:
                 # Verifica condição
                 if not self.evaluate_expression(condition):
                     break
                 
                 # Executa o bloco
-                self.execute_block(block)
+                for inner_line in block_lines:
+                    self.flow_control = None  # Reseta o controle de fluxo
+                    self.execute_line(inner_line)
+                    
+                    # Verifica se houve break
+                    if hasattr(self, 'flow_control') and self.flow_control == 'break':
+                        delattr(self, 'flow_control')
+                        return i + 1  # Sai do loop completamente
+                    
+                    # Verifica continue
+                    if hasattr(self, 'flow_control') and self.flow_control == 'continue':
+                        delattr(self, 'flow_control')
+                        break  # Pula para próxima iteração
                 
                 # Executa incremento
                 self.execute_line(increment)
-                
-                # Verifica se foi interrompido por break
-                if hasattr(self, 'flow_control') and self.flow_control == 'break':
-                    delattr(self, 'flow_control')
-                    break
-                    
-                # Reseta continue se existir
-                if hasattr(self, 'flow_control') and self.flow_control == 'continue':
-                    delattr(self, 'flow_control')
             
-            return end_idx + 1  # Retorna a linha após o 'uuuuh'
+            return i + 1  # Retorna a linha após o 'uuuuh'
         
         except Exception as e:
             raise RuntimeError(f"Erro no for loop: {str(e)}")
-
+    
     def process_if_else(self, lines, start_idx):
         i = start_idx
         blocks = []
