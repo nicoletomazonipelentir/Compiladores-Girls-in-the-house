@@ -1,5 +1,11 @@
 Open the door and have fun
- KENDRA FOXTI (Alex M = 0; M < 5; M++)
-    DISK DUNNY(M)
- uuuuh
+    // Declaração de função
+    PENSAO DA TIA RUIVA RECEBE (Alex NOMEFUNC(Alex A, Alex B))
+    // código da função
+        RETORNA ESSA MERDA A+B;
+    uuuuh
+    // Chamada de função
+    Alex A = 5;
+    Alex B = 8;
+    Alex C = PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B);
 uuuuh

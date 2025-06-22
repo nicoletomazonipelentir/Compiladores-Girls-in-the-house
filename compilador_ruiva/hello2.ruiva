@@ -18,14 +18,3 @@ problema while
 PS C:\Users\nicol\OneDrive\Desktop\andreia\Compiladores-Girls-in-the-house\compilador_ruiva> python tia_ruiva_compiler.py hello.ruiva
 Erro durante a execução: Erro na linha 2: Anteriormente nessa porra (X < 10)
 TiaRuivaCompiler.process_while() missing 1 required positional argument: 'start_idx'
-
-PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
-    Alex RESULTADO = A + B;
-    RETORNA ESSA MERDA RESULTADO;
-uuuuh
-
-
-Alex X = 5;
-Alex Y = 3;
-Alex Z = PENSÃO DA TIA RUIVA ENTREGA SOMAR(X, Y);
-DISK DUNNY(Z);
