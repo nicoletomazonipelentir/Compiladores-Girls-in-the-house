@@ -3,6 +3,8 @@ import re
 class TiaRuivaCompiler:
     def __init__(self):
         self.variables = {}
+        self.current_line = 0  # Adicione esta linha
+        self.lines = []       # Adicione esta linha
         self.type_map = {
             'Duny': str,    # char
             'Shaft': int,   # short
@@ -24,8 +26,8 @@ class TiaRuivaCompiler:
         
     def compile_and_run(self, code):
         self.lines = [line.strip() for line in code.split('\n') if line.strip() and not line.strip().startswith('//')]
-        self.current_line = 0  # Adiciona um contador de linha atual
-
+        self.current_line = 0
+        
         if not self.lines:
             raise RuntimeError("Código vazio")
 
@@ -37,22 +39,26 @@ class TiaRuivaCompiler:
 
         # Remover a primeira e última linhas
         self.lines = self.lines[1:-1]
+        self.current_line = 0  # Adiciona contador de linha
 
-        i = 0
-        while i < len(self.lines):
-            line = self.lines[i]
+        while self.current_line < len(self.lines):
+            line = self.lines[self.current_line]
             try:
                 if line.startswith('KENDRA FOXTI'):
-                    i = self.process_for_loop(self.lines, i)
+                    self.current_line = self.process_for_loop(self.lines, self.current_line)
                 elif line.startswith('Anteriormente nessa porra'):
-                    i = self.process_while(self.lines, i)
+                    self.current_line = self.process_while(self.lines, self.current_line)
                 elif line.startswith('A Katia já foi uma grande mulher'):
-                    i = self.process_conditional_structure(self.lines, i)
+                    remaining_lines = self.lines[self.current_line:]
+                    self.current_line = self.process_conditional_structure(remaining_lines, 0)
+                elif line.startswith('PENSÃO DA TIA RUIVA RECEBE'):
+                    self.process_function_declaration(line)
+                    self.current_line += 1
                 else:
                     self.execute_line(line)
-                    i += 1
+                    self.current_line += 1
             except Exception as e:
-                raise RuntimeError(f"Erro na linha {i+2}: {line}\n{str(e)}")
+                raise RuntimeError(f"Erro na linha {self.current_line+2}: {line}\n{str(e)}")
     
     def reset(self):
         self.variables = {}
@@ -138,7 +144,23 @@ class TiaRuivaCompiler:
             i += 1
 
     def execute_line(self, line):
+        if not hasattr(self, 'current_line'):
+            self.current_line = 0
         line = line.strip()
+    
+        # Verifica se estamos capturando corpo de função
+        if hasattr(self, 'expecting_function_body') and self.expecting_function_body:
+            return self.process_function_body([line], 0)
+        
+        # Trata declaração de função
+        if line.startswith('PENSÃO DA TIA RUIVA RECEBE'):
+            self.process_function_declaration(line)
+            return
+        
+        # Trata chamada de função com atribuição
+        if 'PENSÃO DA TIA RUIVA ENTREGA' in line and '=' in line:
+            self._process_function_assignment(line)
+            return
         
         # Verifica break/continue
         if line == self.FLOW_CONTINUE:
@@ -183,20 +205,17 @@ class TiaRuivaCompiler:
             self.process_input(line)
             return
         
-        # 3. Atribuições
-        elif '=' in line and not line.startswith(('A Katia', 'Anteriormente', 'Caralhetee', 'Ja fui')):
-            self.process_assignment(line)
-            return
+        # # 3. Atribuições
+        # elif '=' in line and not line.startswith(('A Katia', 'Anteriormente', 'Caralhetee', 'Ja fui')):
+        #     self.process_assignment(line)
+        #     return
             
         # 4. Condicionais
         elif line.startswith('A Katia já foi uma grande mulher'):
-            remaining_lines = self._get_remaining_lines()
+            remaining_lines = self.lines[self.current_line + 1:]  # Pega linhas restantes
             return self.process_conditional_structure([line] + remaining_lines, 0)
-           # return
-        elif line.startswith('Caralhetee'):
-            return
-        elif line.startswith('Ja fui uma grande mulher'):
-            return
+        elif line.startswith('Caralhetee') or line.startswith('Ja fui uma grande mulher'):
+            return  # Ignora essas linhas, elas são processadas no método de condicionais
             
         # 5. Loops
         elif line.startswith('Anteriormente nessa porra'):
@@ -233,25 +252,54 @@ class TiaRuivaCompiler:
         else:
             raise SyntaxError(f"Comando não reconhecido: {line}")
 
+    def _process_function_assignment(self, line):
+        #"""Processa atribuições como: Alex X = PENSÃO DA TIA RUIVA ENTREGA SOMAR(5, 3);"""
+        match = re.match(
+            r'(\w+)\s+(\w+)\s*=\s*PENSÃO DA TIA RUIVA ENTREGA\s+(\w+)\(([^)]*)\);?',
+            line
+        )
+        if not match:
+            raise SyntaxError("Atribuição de função inválida")
+
+        var_type, var_name, func_name = match.groups()[:3]
+        args = [arg.strip() for arg in match.group(4).split(',') if arg.strip()]
+
+        # Executa a função e obtém o resultado
+        result = self._execute_function(func_name, args)
+        
+        # Armazena o resultado convertido para o tipo correto
+        if var_type in self.type_map:
+            self.current_context()['vars'][var_name] = self.type_map[var_type](result)
+        else:
+            raise TypeError(f"Tipo desconhecido: {var_type}")
+
+
+
     def process_input(self, line):
         try:
-            # Extrai o tipo e variável (ex: "Todd?("%d", &X)")
-            parts = line.split('?', 1)
-            var_type = parts[0].split()[-1]  # Pega "Todd"
-            var_part = parts[1].split('&')[-1].rstrip(');').strip()  # Pega "X"
+            # Padrão: OLHA SO AQUI Todd?("%d", &X)
+            match = re.match(r'OLHA SO AQUI (\w+)\?\(\s*"[^"]+"\s*,\s*&\s*(\w+)\s*\)', line)
+            if not match:
+                raise ValueError(f"Sintaxe inválida no input: {line}")
+            
+            var_type = match.group(1)  # Tipo (ex: Todd)
+            var_name = match.group(2)  # Nome da variável (ex: X)
+            
+            if var_type not in self.type_map:
+                raise ValueError(f"Tipo desconhecido: {var_type}")
             
             # Simula a entrada do usuário
-            user_input = input(f"Digite um valor para {var_part}: ")
+            user_input = input(f"Digite um valor para {var_name}: ")
             
-            # Converte para o tipo correto
-            if var_type in self.type_map:
-                self.variables[var_part] = self.type_map[var_type](user_input)
-            else:
-                raise ValueError(f"Tipo desconhecido: {var_type}")
+            try:
+                # Converte para o tipo correto
+                self.current_context()['vars'][var_name] = self.type_map[var_type](user_input)
+            except ValueError:
+                raise ValueError(f"Valor inválido para tipo {var_type}: {user_input}")
                 
         except Exception as e:
             raise RuntimeError(f"Erro no input: {str(e)}")
-
+    
     def get_value(self, var):
         var = var.strip()
         if var in self.variables:
@@ -464,50 +512,62 @@ class TiaRuivaCompiler:
     def process_conditional_structure(self, lines, start_idx):
         i = start_idx
         executed = False
-
-        while i < len(lines):
-            line = lines[i].strip()
-
-            # IF
-            if line.startswith('A Katia já foi uma grande mulher'):
-                condition = line[line.find('(')+1:line.rfind(')')].strip()
-                if not executed and self.evaluate_expression(condition):
+        
+        # Processa IF
+        if_match = re.match(r'A Katia já foi uma grande mulher\s*\((.*)\)', lines[i])
+        if not if_match:
+            raise SyntaxError("Sintaxe inválida do if")
+        
+        condition = if_match.group(1)
+        i += 1
+        
+        # Pega bloco do IF
+        if_block, i = self._get_block(lines, i)
+        
+        # Processa ELIFs (Caralhetee)
+        elif_blocks = []
+        while i < len(lines) and lines[i].startswith('Caralhetee'):
+            elif_match = re.match(r'Caralhetee\s*\((.*)\)', lines[i])
+            if not elif_match:
+                raise SyntaxError("Sintaxe inválida do elif")
+            
+            elif_condition = elif_match.group(1)
+            i += 1
+            elif_block, i = self._get_block(lines, i)
+            elif_blocks.append((elif_condition, elif_block))
+        
+        # Processa ELSE (Ja fui uma grande mulher)
+        else_block = []
+        if i < len(lines) and lines[i].startswith('Ja fui uma grande mulher'):
+            i += 1
+            else_block, i = self._get_block(lines, i)
+        
+        # Execução lógica
+        if self.evaluate_expression(condition):
+            self.execute_block(if_block)
+            executed = True
+        else:
+            for elif_cond, elif_blk in elif_blocks:
+                if not executed and self.evaluate_expression(elif_cond):
+                    self.execute_block(elif_blk)
                     executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_to_next_branch(lines, i + 1)
-
-            # ELIF
-            elif line.startswith('Caralhetee'):
-                condition = line[line.find('(')+1:line.rfind(')')].strip()
-                if not executed and self.evaluate_expression(condition):
-                    executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_to_next_branch(lines, i + 1)
-
-            # ELSE
-            elif line.startswith('Ja fui uma grande mulher'):
-                if not executed:
-                    executed = True
-                    i = self._execute_conditional_block(lines, i + 1)
-                else:
-                    i = self._skip_entire_conditional_structure(lines, i + 1)
-
-            # Fim da estrutura
-            elif line == 'uuuuh':
-                return i + 1
-
-            # Linha normal (dentro de um bloco)
-            else:
-                i += 1
-
-        return i
-
+                    break
+            
+            if not executed and else_block:
+                self.execute_block(else_block)
+        
+        return i - start_idx
+    
+    def _get_block(self, lines, start_idx):
+        block = []
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            block.append(lines[i])
+            i += 1
+        return block, i + 1
+   
     def _get_remaining_lines(self):
-        if hasattr(self, 'lines') and hasattr(self, 'current_line'):
-            return self.lines[self.current_line + 1:]
-        return []
+        return self.lines[self.current_line+1:] if hasattr(self, 'lines') else []
 
     def _execute_conditional_block(self, lines, start_idx):
         #"""Executa todas as linhas até encontrar 'uuuuh'"""
@@ -656,32 +716,64 @@ class TiaRuivaCompiler:
                     raise ValueError(f"Erro ao avaliar expressão '{content}': {str(e)}")
         except Exception as e:
             raise RuntimeError(f"Erro no processamento do print: {str(e)}")
+        
+        
+    def capture_function_body(self, lines, start_idx):
+        if not self.current_function:
+            return start_idx
+
+        body_lines = []
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            line = lines[i].strip()
+            if line and not line.startswith('//'):
+                body_lines.append(line)
+            i += 1
+
+        # Armazena o corpo da função
+        if self.current_function in self.global_functions:
+            self.global_functions[self.current_function]['body'] = body_lines
+
+        self.current_function = None
+        self.expecting_function_body = False
+        return i + 1  # Retorna a linha após 'uuuuh'
 
     def process_function_declaration(self, line):
-        try:
-            # Padrão: PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
-            match = re.match(
-                r'PENSÃO DA TIA RUIVA RECEBE\s*\((\w+)\s+(\w+)\(((?:\w+\s+\w+,?\s*)*)\)\)', 
-                line
-            )
-            if not match:
-                raise SyntaxError("Sintaxe inválida para declaração de função")
-            
-            return_type = match.group(1)
-            func_name = match.group(2)
-            params = [p.strip() for p in match.group(3).split(',') if p.strip()]
-            
-            # Armazena a função no contexto global
-            self.global_functions[func_name] = {
-                'return_type': return_type,
-                'params': params,
-                'body': []
-            }
-            self.current_function = func_name
-            
-        except Exception as e:
-            raise RuntimeError(f"Erro na declaração de função: {str(e)}")
-    
+        match = re.match(
+            r'PENSÃO DA TIA RUIVA RECEBE\s*\((\w+)\s+(\w+)\(((?:\w+\s+\w+,?\s*)*)\)\)',
+            line
+        )
+        if not match:
+            raise SyntaxError("Declaração de função inválida")
+
+        return_type = match.group(1)
+        func_name = match.group(2)
+        params = [p.strip() for p in match.group(3).split(',') if p.strip()]
+
+        # Garante que a função seja registrada corretamente
+        self.global_functions[func_name] = {
+            'return_type': return_type,
+            'params': params,
+            'body': []
+        }
+        self.current_function = func_name
+        self.expecting_function_body = True
+        
+    def process_function_body(self, lines, start_idx):
+        #"""Captura o corpo da função até encontrar 'uuuuh'"""
+        if not self.current_function:
+            return start_idx
+
+        i = start_idx
+        while i < len(lines) and lines[i].strip() != 'uuuuh':
+            line = lines[i].strip()
+            if line and not line.startswith('//'):
+                self.global_functions[self.current_function]['body'].append(line)
+            i += 1
+
+        self.current_function = None
+        self.expecting_function_body = False
+        return i + 1  # Retorna a linha após o 'uuuuh'
     
     def process_function_body(self, lines, start_idx):
         func_name = self.current_function
@@ -696,56 +788,85 @@ class TiaRuivaCompiler:
         return i + 1  # Retorna a linha após o 'uuuuh'
         
     def process_function_call(self, line):
-        try:
-            # Padrão: PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B)
-            match = re.match(r'PENSÃO DA TIA RUIVA ENTREGA\s+(\w+)\(([^)]*)\)', line)
-            if not match:
-                raise SyntaxError("Sintaxe inválida para chamada de função")
-            
-            func_name = match.group(1)
-            args = [arg.strip() for arg in match.group(2).split(',') if arg.strip()]
-            
-            # Verifica se função existe
-            if func_name not in self.global_functions:
-                raise NameError(f"Função '{func_name}' não definida")
-            
-            func_def = self.global_functions[func_name]
-            
-            # Verifica número de parâmetros
-            if len(args) != len(func_def['params']):
-                raise TypeError(f"Número incorreto de argumentos para {func_name}")
-            
-            # Cria novo contexto com parâmetros
-            new_scope = {'vars': {}, 'functions': {}}
-            
-            # Mapeia parâmetros (Alex A → A)
-            for param_decl, arg in zip(func_def['params'], args):
-                param_parts = param_decl.split()
-                param_name = param_parts[-1]  # Pega só o nome
-                new_scope['vars'][param_name] = self.evaluate_expression(arg)
-            
-            self.context_stack.append(new_scope)
-            
-            # Executa o corpo
-            result = None
-            for line in func_def['body']:
-                if line.startswith('RETORNA ESSA MERDA'):
-                    return_expr = line[18:].strip(' ;')
-                    result = self.evaluate_expression(return_expr)
-                    break
-                self.execute_line(line)
-            
-            self.context_stack.pop()
-            return result
-            
-        except Exception as e:
-            raise RuntimeError(f"Erro na chamada de função: {str(e)}")
-    
+        #"""Processa Alex X = PENSÃO DA TIA RUIVA ENTREGA SOMAR(5, 3);"""
+        match = re.match(r'(\w+)\s+(\w+)\s*=\s*PENSÃO DA TIA RUIVA ENTREGA\s+(\w+)\(([^)]*)\);?', line)
+        if not match:
+            raise SyntaxError("Chamada de função inválida")
         
+        var_type, var_name, func_name = match.group(1), match.group(2), match.group(3)
+        args = [arg.strip() for arg in match.group(4).split(',') if arg.strip()]
+        
+        # Executa a função e obtém o resultado
+        result = self._execute_function(func_name, args)
+        
+        # Armazena o resultado na variável
+        self.current_context()['vars'][var_name] = self.type_map[var_type](result)
+        return result
+    
     def process_return(self, line):
         expr = re.match(r'RETORNA ESSA MERDA (.*?);', line).group(1)
         result = self.evaluate_expression(expr)
         self.last_return = result
+        return result
+
+    def _execute_function(self, func_name, args):
+        #"""Executa uma função e retorna seu valor"""
+        if func_name not in self.global_functions:
+            raise NameError(f"Função '{func_name}' não definida")
+
+        func = self.global_functions[func_name]
+        
+        # Verifica número de argumentos
+        if len(args) != len(func['params']):
+            raise TypeError(f"Número incorreto de argumentos para {func_name}")
+
+        # Cria novo escopo
+        self.context_stack.append({'vars': {}})
+
+        # Mapeia parâmetros
+        for param_decl, arg in zip(func['params'], args):
+            param_type, param_name = param_decl.split()
+            self.current_context()['vars'][param_name] = self.evaluate_expression(arg)
+
+        # Executa o corpo
+        result = None
+        for line in func['body']:
+            if line.startswith('RETORNA ESSA MERDA'):
+                return_expr = line[18:].strip(' ;')
+                result = self.evaluate_expression(return_expr)
+                break
+            self.execute_line(line)
+
+        # Remove escopo
+        self.context_stack.pop()
+        
+        return result
+
+    def execute_function(self, func_name, args):
+        if func_name not in self.global_functions:
+            raise NameError(f"Função '{func_name}' não definida")
+        
+        func_def = self.global_functions[func_name]
+        
+        # Cria novo escopo
+        new_scope = {'vars': {}}
+        self.context_stack.append(new_scope)
+        
+        # Mapeia parâmetros
+        for param_decl, arg in zip(func_def['params'], args):
+            param_type, param_name = param_decl.split()
+            new_scope['vars'][param_name] = arg
+        
+        # Executa o corpo
+        result = None
+        for line in func_def['body']:
+            if line.startswith('RETORNA ESSA MERDA'):
+                return_expr = line[18:].strip()
+                result = self.evaluate_expression(return_expr)
+                break
+            self.execute_line(line)
+        
+        self.context_stack.pop()
         return result
 
     def evaluate_expression(self, expr):
@@ -799,5 +920,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Uso: python tia_ruiva_compiler.py hello.ruiva")
         sys.exit(1)
-    
     run_ruiva_file(sys.argv[1])

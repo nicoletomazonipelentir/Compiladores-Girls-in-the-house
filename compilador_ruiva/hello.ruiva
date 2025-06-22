@@ -1,11 +1,22 @@
 Open the door and have fun
-    // Declaração de função
-    PENSAO DA TIA RUIVA RECEBE (Alex NOMEFUNC(Alex A, Alex B))
-    // código da função
-        RETORNA ESSA MERDA A+B;
+    A Katia já foi uma grande mulher (3 > 2)
+        DISK DUNNY("Verdadeiro");
     uuuuh
-    // Chamada de função
-    Alex A = 5;
-    Alex B = 8;
-    Alex C = PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B);
+    Caralhetee (3 < 2)
+        DISK DUNNY("Elif");
+    uuuuh
+    Ja fui uma grande mulher
+        DISK DUNNY("Else");
+    uuuuh
+
+    DISK DUNNY("===============================");
+    
+    PENSÃO DA TIA RUIVA RECEBE (Alex SOMAR(Alex A, Alex B))
+        RETORNA ESSA MERDA A + B;
+    uuuuh
+
+    Alex X = 0;
+    X=PENSÃO DA TIA RUIVA ENTREGA SOMAR(5, 3);
+    DISK DUNNY(X);
+
 uuuuh
