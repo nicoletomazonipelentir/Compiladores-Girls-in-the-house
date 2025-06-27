@@ -8,7 +8,7 @@ Bem-vindo à **Pensão da Tia Ruiva**, uma linguagem de programação criada por
 
 Este projeto é um **compilador (ou interpretador)** de uma linguagem fictícia chamada **Pensão da Tia Ruiva**, que transforma frases esquisitas (mas geniais) como:
 
-```ruiva
+
 A Katia já foi uma grande mulher (X > 2)
 em Python puro, tipo:
 if X > 2:
