@@ -31,7 +31,9 @@ if X > 2:
 | `RETORNA ESSA MERDA`                      | `return`                     |
 | `PENSAO DA TIA RUIVA ENTREGA`             | chamada de função            |
 
+
 🧪 Exemplo de Código
+```
 Alex IDADE=0;
 DISK DUNNY("Escreva sua idade:");
 OLHA SO AQUI Alex?("%d", &IDADE);
@@ -46,7 +48,7 @@ Caralhetee (IDADE <18)
 Já fui uma grande mulher
     DISK DUNNY("Idade inválida!");
     uuuuh
-
+```
 
 ✨ Créditos
 Esse projeto foi criado como parte de estudos na disciplina de Compiladores.
