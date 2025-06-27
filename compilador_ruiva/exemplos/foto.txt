@@ -1,9 +1,0 @@
- // Declaração de função
- PENSAO DA TIA RUIVA RECEBE (Alex NOMEFUNC(Alex A, Alex B))
- // código da função
- RETORNA ESSA MERDA 1;
- uuuuh
- // Chamada de função
- Alex A = 5;
- Alex B = 8;
- Alex C = PENSAO DA TIA RUIVA ENTREGA SOMAR(A, B)
